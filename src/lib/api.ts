@@ -9,6 +9,7 @@ import {
   MovieDetail,
   MovieListItem,
   PaginatedResult,
+  Poster,
   SessionUser,
   TokenResponse,
 } from "../types/api";
@@ -16,6 +17,61 @@ import { getStoredToken } from "./session";
 import { fromDatetimeLocal } from "./utils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://192.168.68.150:8000";
+
+function normalizeMediaUrl(value: string | null | undefined) {
+  if (!value) {
+    return value ?? null;
+  }
+
+  try {
+    const assetUrl = new URL(value);
+    const isInternalMinioUrl = assetUrl.hostname === "minio";
+
+    if (!isInternalMinioUrl) {
+      return assetUrl.toString();
+    }
+
+    const apiUrl = new URL(API_BASE_URL);
+    const [bucketName, ...objectParts] = assetUrl.pathname.split("/").filter(Boolean);
+    if (!bucketName || objectParts.length === 0) {
+      return assetUrl.toString();
+    }
+
+    const objectPath = objectParts.map(encodeURIComponent).join("/");
+    return `${apiUrl.origin}/v1/media/${encodeURIComponent(bucketName)}/${objectPath}`;
+  } catch {
+    return value;
+  }
+}
+
+function normalizeActor(actor: Actor): Actor {
+  return {
+    ...actor,
+    photo_url: normalizeMediaUrl(actor.photo_url),
+  };
+}
+
+function normalizePoster<T extends Poster>(poster: T): T {
+  return {
+    ...poster,
+    url: normalizeMediaUrl(poster.url) ?? poster.url,
+  };
+}
+
+function normalizeMovieListItem<T extends MovieListItem>(movie: T): T {
+  return {
+    ...movie,
+    primary_poster: movie.primary_poster ? normalizePoster(movie.primary_poster) : null,
+  };
+}
+
+function normalizeMovieDetail(movie: MovieDetail): MovieDetail {
+  return {
+    ...normalizeMovieListItem(movie),
+    actors: movie.actors.map(normalizeActor),
+    posters: movie.posters.map(normalizePoster),
+  };
+}
 
 export class ApiError extends Error implements ApiErrorShape {
   status: number;
@@ -174,12 +230,17 @@ export const actorsApi = {
       offset: number;
       limit: number;
       has_more: boolean;
-    }>(`/v1/actors/?${search.toString()}`).then(normalizePage);
+    }>(`/v1/actors/?${search.toString()}`).then((payload) =>
+      normalizePage({
+        ...payload,
+        items: payload.items.map(normalizeActor),
+      }),
+    );
   },
   create: (payload: FormData | Partial<Actor>) =>
-    request<Actor>("/v1/admin/actors/", { method: "POST", body: payload }),
+    request<Actor>("/v1/admin/actors/", { method: "POST", body: payload }).then(normalizeActor),
   update: (actorId: string, payload: FormData | Partial<Actor>) =>
-    request<Actor>(`/v1/admin/actors/${actorId}`, { method: "PATCH", body: payload }),
+    request<Actor>(`/v1/admin/actors/${actorId}`, { method: "PATCH", body: payload }).then(normalizeActor),
   remove: (actorId: string) =>
     request<void>(`/v1/admin/actors/${actorId}`, { method: "DELETE" }),
 };
@@ -206,17 +267,39 @@ export const moviesApi = {
       offset: number;
       limit: number;
       has_more: boolean;
-    }>(`/v1/admin/movies/?${search.toString()}`).then(normalizePage);
+    }>(`/v1/admin/movies/?${search.toString()}`).then((payload) =>
+      normalizePage({
+        ...payload,
+        items: payload.items.map(normalizeMovieListItem),
+      }),
+    );
   },
-  get: (movieId: string) => request<MovieDetail>(`/v1/admin/movies/${movieId}`),
+  get: (movieId: string) => request<MovieDetail>(`/v1/admin/movies/${movieId}`).then(normalizeMovieDetail),
   create: (payload: FormData | Record<string, unknown>) =>
-    request<MovieDetail>("/v1/admin/movies/", { method: "POST", body: payload }),
+    request<MovieDetail>("/v1/admin/movies/", { method: "POST", body: payload }).then(normalizeMovieDetail),
   update: (movieId: string, payload: FormData | Record<string, unknown>) =>
-    request<MovieDetail>(`/v1/admin/movies/${movieId}`, { method: "PATCH", body: payload }),
+    request<MovieDetail>(`/v1/admin/movies/${movieId}`, { method: "PATCH", body: payload }).then(normalizeMovieDetail),
   remove: (movieId: string) =>
     request<void>(`/v1/admin/movies/${movieId}`, { method: "DELETE" }),
+  listCategories: (params: { query?: string; offset?: number; limit?: number }) => {
+    const search = new URLSearchParams();
+    if (params.query) search.set("query", params.query);
+    if (params.offset != null) search.set("offset", String(params.offset));
+    if (params.limit != null) search.set("limit", String(params.limit));
+    return request<{
+      items: MovieCategory[];
+      total: number;
+      offset: number;
+      limit: number;
+      has_more: boolean;
+    }>(`/v1/admin/movies/categories/?${search.toString()}`).then(normalizePage);
+  },
   createCategory: (payload: { name: string; slug?: string }) =>
     request<MovieCategory>("/v1/admin/movies/categories", { method: "POST", body: payload }),
+  updateCategory: (categoryId: string, payload: { name: string }) =>
+    request<MovieCategory>(`/v1/admin/movies/categories/${categoryId}`, { method: "PATCH", body: payload }),
+  removeCategory: (categoryId: string) =>
+    request<void>(`/v1/admin/movies/categories/${categoryId}`, { method: "DELETE" }),
 };
 
 export const eventsApi = {

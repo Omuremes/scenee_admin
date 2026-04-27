@@ -424,6 +424,22 @@ button, input, textarea, select {
   width: min(100%, 1360px);
 }
 
+.modal-card--actor {
+  width: min(100%, 980px);
+}
+
+.actor-modal-layout {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.72fr);
+  align-items: start;
+}
+
+.actor-modal-preview {
+  position: sticky;
+  top: 0;
+}
+
 .editor-modal-form,
 .editor-modal-grid,
 .editor-modal-main,
@@ -883,6 +899,14 @@ button, input, textarea, select {
 
   .editor-modal-grid {
     grid-template-columns: 1fr;
+  }
+
+  .actor-modal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .actor-modal-preview {
+    position: static;
   }
 
   .editor-modal-side {

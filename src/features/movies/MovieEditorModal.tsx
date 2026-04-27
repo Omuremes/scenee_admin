@@ -484,7 +484,8 @@ export function MovieEditorModal({ mode, movieId }: { mode: "create" | "edit"; m
               <aside className="editor-modal-side">
                 <div className="panel editor-preview-card">
                   <div className="editor-preview-card__media">
-                    {posterPreview ? <img src="http://minio:9000/cinescope-media/movies/1e93a225-bbe5-41c1-afc9-938020d362a9.jpg" alt="Poster preview" /> : <div className="editor-preview-card__empty">No poster preview</div>}
+                    {posterPreview ? <img src={posterPreview} alt="Poster preview" /> : <div className="editor-preview-card__empty">No poster preview</div>}
+                    {/* {posterPreview ? <img src="http://192.168.68.150:9000/cinescope-media/movies/e5af3365-6c56-42d8-9f74-cb43a9f85ca4.jpg" alt="Poster preview" /> : <div className="editor-preview-card__empty">No poster preview</div>} */}
                   </div>
                   <div className="editor-preview-card__body">
                     <span className={`editor-preview-badge${isSeries ? " editor-preview-badge--series" : ""}`}>{isSeries ? "Series" : "Movie"}</span>

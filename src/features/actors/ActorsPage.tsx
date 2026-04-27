@@ -45,6 +45,7 @@ export function ActorsPage() {
   const [selectedActor, setSelectedActor] = useState<Actor | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
 
   const actorsQuery = useQuery({
@@ -56,13 +57,27 @@ export function ActorsPage() {
     resolver: zodResolver(schema),
     values: useMemo(() => toFormValues(selectedActor), [selectedActor]),
   });
+  const previewName = form.watch("fullName") ?? "";
+  const previewBio = form.watch("bio") ?? "";
 
   useEffect(() => {
     if (!isModalOpen) {
       setPhotoFile(null);
+      setPhotoPreview("");
       setServerError(null);
     }
   }, [isModalOpen]);
+
+  useEffect(() => {
+    if (photoFile) {
+      const objectUrl = URL.createObjectURL(photoFile);
+      setPhotoPreview(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+
+    setPhotoPreview(selectedActor?.photo_url ?? "");
+    return undefined;
+  }, [photoFile, selectedActor]);
 
   function openCreateModal() {
     setSelectedActor(null);
@@ -236,7 +251,7 @@ export function ActorsPage() {
       {isModalOpen ? (
         <div className="modal-backdrop" onClick={closeModal}>
           <div
-            className="modal-card panel"
+            className="modal-card modal-card--actor panel"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -249,35 +264,50 @@ export function ActorsPage() {
               </button>
             </div>
 
-            <form className="stack-form" onSubmit={form.handleSubmit(onSubmit)}>
-              <FormField label="Name" error={form.formState.errors.fullName?.message}>
-                <input className="input" {...form.register("fullName")} />
-              </FormField>
+            <div className="actor-modal-layout">
+              <form className="stack-form" onSubmit={form.handleSubmit(onSubmit)}>
+                <FormField label="Name" error={form.formState.errors.fullName?.message}>
+                  <input className="input" {...form.register("fullName")} />
+                </FormField>
 
-              <FormField
-                label="Photo Upload"
-                hint={selectedActor && !photoFile ? "Leave empty to keep the current photo." : undefined}
-              >
-                <input
-                  className="input input--file"
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
-                />
-              </FormField>
+                <FormField
+                  label="Photo Upload"
+                  hint={selectedActor && !photoFile ? "Leave empty to keep the current photo." : undefined}
+                >
+                  <input
+                    className="input input--file"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                  />
+                </FormField>
 
-              <FormField label="Bio" error={form.formState.errors.bio?.message}>
-                <textarea className="textarea" rows={6} {...form.register("bio")} />
-              </FormField>
+                <FormField label="Bio" error={form.formState.errors.bio?.message}>
+                  <textarea className="textarea" rows={6} {...form.register("bio")} />
+                </FormField>
 
-              {serverError ? <div className="alert alert--error">{serverError}</div> : null}
+                {serverError ? <div className="alert alert--error">{serverError}</div> : null}
 
-              <div className="button-row">
-                <button className="button" type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                  {createMutation.isPending || updateMutation.isPending ? "Saving..." : selectedActor ? "Save actor" : "Create actor"}
-                </button>
-              </div>
-            </form>
+                <div className="button-row">
+                  <button className="button" type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                    {createMutation.isPending || updateMutation.isPending ? "Saving..." : selectedActor ? "Save actor" : "Create actor"}
+                  </button>
+                </div>
+              </form>
+
+              <aside className="actor-modal-preview">
+                <div className="panel editor-preview-card">
+                  <div className="editor-preview-card__media">
+                    {photoPreview ? <img src={photoPreview} alt="Actor preview" /> : <div className="editor-preview-card__empty">No photo preview</div>}
+                  </div>
+                  <div className="editor-preview-card__body">
+                    <span className="editor-preview-badge">Actor</span>
+                    <h3>{previewName.trim() || "Unnamed actor"}</h3>
+                    <p>{previewBio.trim() || "Actor bio preview appears here."}</p>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
         </div>
       ) : null}
