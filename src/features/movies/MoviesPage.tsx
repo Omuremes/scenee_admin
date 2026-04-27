@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useMatch } from "react-router-dom";
 
 import { Pagination } from "../../components/Pagination";
 import { StatusView } from "../../components/StatusView";
@@ -8,6 +8,7 @@ import { useToast } from "../../components/ToastProvider";
 import { moviesApi } from "../../lib/api";
 import { getCategoryRegistry, subscribeCategoryRegistry, upsertCategories } from "../../lib/categoryRegistry";
 import { formatDateTime } from "../../lib/utils";
+import { MovieEditorModal } from "./MovieEditorModal";
 
 const LIMIT = 10;
 const typeFilters = [
@@ -17,6 +18,8 @@ const typeFilters = [
 ];
 
 export function MoviesPage() {
+  const createMatch = useMatch("/admin/movies/new");
+  const editMatch = useMatch("/admin/movies/:movieId");
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const [offset, setOffset] = useState(0);
@@ -24,6 +27,8 @@ export function MoviesPage() {
   const [categoryId, setCategoryId] = useState("");
   const [isSeries, setIsSeries] = useState<"all" | "true" | "false">("all");
   const [registry, setRegistry] = useState(getCategoryRegistry);
+  const modalMode = createMatch ? "create" : editMatch ? "edit" : null;
+  const editingMovieId = editMatch?.params.movieId;
 
   useEffect(() => subscribeCategoryRegistry(() => setRegistry(getCategoryRegistry())), []);
 
@@ -74,7 +79,6 @@ export function MoviesPage() {
         <div className="toolbar toolbar--wide">
           <input className="input" placeholder="Search title or description" value={query} onChange={(event) => setQuery(event.target.value)} />
         </div>
-        <p></p>
         <div className="filter-stack">
           <div className="filter-block">
             <span className="filter-block__label">Type</span>
@@ -173,6 +177,7 @@ export function MoviesPage() {
           <StatusView title="No titles found" detail="Create a movie or series, or broaden the filters." />
         )}
       </div>
+      {modalMode ? <MovieEditorModal mode={modalMode} movieId={editingMovieId} /> : null}
     </section>
   );
 }

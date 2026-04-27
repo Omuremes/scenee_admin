@@ -420,6 +420,34 @@ button, input, textarea, select {
   overflow-y: auto;
 }
 
+.modal-card--wide {
+  width: min(100%, 1360px);
+}
+
+.editor-modal-form,
+.editor-modal-grid,
+.editor-modal-main,
+.editor-modal-side,
+.editor-modal-actions {
+  display: grid;
+  gap: 18px;
+}
+
+.editor-modal-grid {
+  column-gap: 50px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.72fr);
+  align-items: start;
+}
+
+.editor-modal-side {
+  position: sticky;
+  top: 0;
+}
+
+.editor-modal-actions .button-row {
+  justify-content: flex-start;
+}
+
 .plain-list {
   margin: 0;
   padding-left: 18px;
@@ -850,6 +878,14 @@ button, input, textarea, select {
   }
 
   .editor-flow__side {
+    position: static;
+  }
+
+  .editor-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-modal-side {
     position: static;
   }
 
