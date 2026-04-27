@@ -39,14 +39,6 @@ export function DashboardPage() {
         </article>
       </div>
       <div className="two-column">
-        <section className="panel">
-          <h3>Backend quirks preserved</h3>
-          <ul className="plain-list">
-            <li>Admin events use `/v1admin/events`.</li>
-            <li>Categories are create-only and collected locally from movie payloads.</li>
-            <li>Venue UUIDs must be entered manually for event forms.</li>
-          </ul>
-        </section>
         <section className="panel panel--accent">
           <h3>Fast actions</h3>
           <div className="button-row">

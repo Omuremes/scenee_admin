@@ -150,9 +150,14 @@ button, input, textarea, select {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 280px 1fr;
+  align-items: start;
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
   border-right: 1px solid var(--panel-border);
   padding: 28px 20px;
   display: flex;
@@ -280,6 +285,11 @@ button, input, textarea, select {
   white-space: nowrap;
 }
 
+.table-cell-clip {
+  max-width: 420px;
+  color: var(--muted);
+}
+
 .table-subline {
   display: block;
   font-size: 0.82rem;
@@ -318,6 +328,29 @@ button, input, textarea, select {
   color: var(--text);
   padding: 8px 12px;
   cursor: pointer;
+}
+
+.filter-stack,
+.filter-block {
+  display: grid;
+  gap: 10px;
+}
+
+.filter-block__label {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.filter-chip {
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.filter-chip--active {
+  border-color: rgba(220, 192, 109, 0.46);
+  background: rgba(220, 192, 109, 0.16);
+  color: var(--text);
 }
 
 .picker-item:disabled {
@@ -360,6 +393,31 @@ button, input, textarea, select {
 .toast--error {
   background: rgba(255, 110, 99, 0.18);
   border: 1px solid rgba(255, 110, 99, 0.3);
+}
+
+.actors-search {
+  flex: 1 1 320px;
+}
+
+.actors-actions {
+  justify-content: flex-start;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 4, 6, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.modal-card {
+  width: min(100%, 620px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 .plain-list {
@@ -781,6 +839,9 @@ button, input, textarea, select {
   }
 
   .sidebar {
+    position: static;
+    height: auto;
+    overflow-y: visible;
     padding-bottom: 12px;
   }
 

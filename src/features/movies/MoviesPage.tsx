@@ -10,6 +10,11 @@ import { getCategoryRegistry, subscribeCategoryRegistry, upsertCategories } from
 import { formatDateTime } from "../../lib/utils";
 
 const LIMIT = 10;
+const typeFilters = [
+  { value: "all" as const, label: "All" },
+  { value: "false" as const, label: "Movies" },
+  { value: "true" as const, label: "Series" },
+];
 
 export function MoviesPage() {
   const queryClient = useQueryClient();
@@ -68,19 +73,56 @@ export function MoviesPage() {
       <div className="panel">
         <div className="toolbar toolbar--wide">
           <input className="input" placeholder="Search title or description" value={query} onChange={(event) => setQuery(event.target.value)} />
-          <select className="input" value={isSeries} onChange={(event) => setIsSeries(event.target.value as "all" | "true" | "false")}>
-            <option value="all">All title types</option>
-            <option value="false">Movies only</option>
-            <option value="true">Series only</option>
-          </select>
-          <select className="input" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-            <option value="">All categories</option>
-            {registry.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+        </div>
+        <p></p>
+        <div className="filter-stack">
+          <div className="filter-block">
+            <span className="filter-block__label">Type</span>
+            <div className="chip-row">
+              {typeFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={`chip filter-chip${isSeries === filter.value ? " filter-chip--active" : ""}`}
+                  onClick={() => {
+                    setOffset(0);
+                    setIsSeries(filter.value);
+                  }}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-block">
+            <span className="filter-block__label">Category</span>
+            <div className="chip-row">
+              <button
+                type="button"
+                className={`chip filter-chip${categoryId === "" ? " filter-chip--active" : ""}`}
+                onClick={() => {
+                  setOffset(0);
+                  setCategoryId("");
+                }}
+              >
+                All
+              </button>
+              {registry.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  className={`chip filter-chip${categoryId === category.id ? " filter-chip--active" : ""}`}
+                  onClick={() => {
+                    setOffset(0);
+                    setCategoryId(category.id);
+                  }}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         {moviesQuery.data?.items.length ? (
           <>

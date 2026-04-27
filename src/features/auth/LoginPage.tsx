@@ -51,13 +51,13 @@ export function LoginPage() {
       <div className="login-card">
         <p className="eyebrow">Scenee Operations Console</p>
         <h1>Admin sign-in</h1>
-        <p className="login-copy">Use your backend admin account. Non-admin accounts are rejected after `/v1/auth/me` resolves.</p>
+        <p></p>
         <form className="stack-form" onSubmit={handleSubmit(onSubmit)}>
           <FormField label="Email" error={errors.email?.message}>
             <input className="input" type="email" placeholder="admin@example.com" {...register("email")} />
           </FormField>
           <FormField label="Password" error={errors.password?.message}>
-            <input className="input" type="password" placeholder="Minimum 8 characters" {...register("password")} />
+            <input className="input" type="password" placeholder="••••••••" {...register("password")} />
           </FormField>
           {serverError ? <div className="alert alert--error">{serverError}</div> : null}
           <button className="button" type="submit" disabled={isSubmitting}>

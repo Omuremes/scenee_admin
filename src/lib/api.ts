@@ -176,9 +176,9 @@ export const actorsApi = {
       has_more: boolean;
     }>(`/v1/actors/?${search.toString()}`).then(normalizePage);
   },
-  create: (payload: Partial<Actor>) =>
+  create: (payload: FormData | Partial<Actor>) =>
     request<Actor>("/v1/admin/actors/", { method: "POST", body: payload }),
-  update: (actorId: string, payload: Partial<Actor>) =>
+  update: (actorId: string, payload: FormData | Partial<Actor>) =>
     request<Actor>(`/v1/admin/actors/${actorId}`, { method: "PATCH", body: payload }),
   remove: (actorId: string) =>
     request<void>(`/v1/admin/actors/${actorId}`, { method: "DELETE" }),

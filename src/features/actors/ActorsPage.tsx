@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -12,34 +12,44 @@ import { actorsApi, isApiError } from "../../lib/api";
 import { Actor } from "../../types/api";
 
 const schema = z.object({
-  fullName: z.string().trim().min(1, "Full name is required"),
-  photoUrl: z.string().trim().optional(),
+  fullName: z.string().trim().min(1, "Name is required"),
   bio: z.string().optional(),
 });
 
 type ActorValues = z.infer<typeof schema>;
 
 const LIMIT = 12;
+const BIO_PREVIEW_LIMIT = 120;
 
 function toFormValues(actor?: Actor | null): ActorValues {
   return {
     fullName: actor?.full_name ?? "",
-    photoUrl: actor?.photo_url ?? "",
     bio: actor?.bio ?? "",
   };
+}
+
+function truncateBio(bio: string | null) {
+  if (!bio?.trim()) {
+    return "—";
+  }
+  const normalized = bio.replace(/\s+/g, " ").trim();
+  return normalized.length > BIO_PREVIEW_LIMIT ? `${normalized.slice(0, BIO_PREVIEW_LIMIT).trimEnd()}...` : normalized;
 }
 
 export function ActorsPage() {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const [offset, setOffset] = useState(0);
-  const [query, setQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
   const [selectedActor, setSelectedActor] = useState<Actor | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const actorsQuery = useQuery({
-    queryKey: ["actors", { query, offset }],
-    queryFn: () => actorsApi.list({ query, offset, limit: LIMIT }),
+    queryKey: ["actors", { query: appliedQuery, offset }],
+    queryFn: () => actorsApi.list({ query: appliedQuery, offset, limit: LIMIT }),
   });
 
   const form = useForm<ActorValues>({
@@ -47,33 +57,64 @@ export function ActorsPage() {
     values: useMemo(() => toFormValues(selectedActor), [selectedActor]),
   });
 
+  useEffect(() => {
+    if (!isModalOpen) {
+      setPhotoFile(null);
+      setServerError(null);
+    }
+  }, [isModalOpen]);
+
+  function openCreateModal() {
+    setSelectedActor(null);
+    form.reset(toFormValues(null));
+    setPhotoFile(null);
+    setServerError(null);
+    setIsModalOpen(true);
+  }
+
+  function openEditModal(actor: Actor) {
+    setSelectedActor(actor);
+    form.reset(toFormValues(actor));
+    setPhotoFile(null);
+    setServerError(null);
+    setIsModalOpen(true);
+  }
+
+  function closeModal() {
+    setIsModalOpen(false);
+  }
+
   const createMutation = useMutation({
-    mutationFn: (values: ActorValues) =>
-      actorsApi.create({
-        full_name: values.fullName,
-        photo_url: values.photoUrl || null,
-        bio: values.bio || null,
-      }),
+    mutationFn: (values: ActorValues) => {
+      const body = new FormData();
+      body.append("full_name", values.fullName);
+      body.append("bio", values.bio?.trim() || "");
+      if (photoFile) {
+        body.append("photo", photoFile);
+      }
+      return actorsApi.create(body);
+    },
     onSuccess: () => {
       pushToast("success", "Actor created.");
-      setServerError(null);
-      form.reset(toFormValues(null));
       queryClient.invalidateQueries({ queryKey: ["actors"] });
+      closeModal();
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: (values: ActorValues) =>
-      actorsApi.update(selectedActor!.id, {
-        full_name: values.fullName,
-        photo_url: values.photoUrl || null,
-        bio: values.bio || null,
-      }),
-    onSuccess: (actor) => {
+    mutationFn: (values: ActorValues) => {
+      const body = new FormData();
+      body.append("full_name", values.fullName);
+      body.append("bio", values.bio?.trim() || "");
+      if (photoFile) {
+        body.append("photo", photoFile);
+      }
+      return actorsApi.update(selectedActor!.id, body);
+    },
+    onSuccess: () => {
       pushToast("success", "Actor updated.");
-      setSelectedActor(actor);
-      setServerError(null);
       queryClient.invalidateQueries({ queryKey: ["actors"] });
+      closeModal();
     },
   });
 
@@ -81,8 +122,6 @@ export function ActorsPage() {
     mutationFn: (actorId: string) => actorsApi.remove(actorId),
     onSuccess: () => {
       pushToast("success", "Actor deleted.");
-      setSelectedActor(null);
-      form.reset(toFormValues(null));
       queryClient.invalidateQueries({ queryKey: ["actors"] });
     },
   });
@@ -100,6 +139,11 @@ export function ActorsPage() {
     }
   }
 
+  function handleApplySearch() {
+    setOffset(0);
+    setAppliedQuery(searchInput.trim());
+  }
+
   if (actorsQuery.isLoading) {
     return <StatusView title="Loading actors" detail="Fetching paginated cast inventory." />;
   }
@@ -112,98 +156,131 @@ export function ActorsPage() {
           <h2>Actor registry</h2>
         </div>
       </div>
-      <div className="split-layout">
-        <div className="panel">
-          <div className="toolbar">
-            <input className="input" placeholder="Search actor name" value={query} onChange={(event) => setQuery(event.target.value)} />
-            <button type="button" className="button button--ghost" onClick={() => setOffset(0)}>
+
+      <section className="panel">
+        <div className="toolbar toolbar--wide">
+          <input
+            className="input actors-search"
+            placeholder="Search actor name"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                handleApplySearch();
+              }
+            }}
+          />
+          <div className="button-row">
+            <button type="button" className="button button--ghost" onClick={handleApplySearch}>
               Apply
             </button>
+            <button type="button" className="button" onClick={openCreateModal}>
+              Add
+            </button>
           </div>
-          {actorsQuery.data?.items.length ? (
-            <>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Photo</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {actorsQuery.data.items.map((actor) => (
-                    <tr key={actor.id}>
-                      <td>{actor.full_name}</td>
-                      <td>{actor.photo_url ? "URL set" : "—"}</td>
-                      <td>
-                        <button type="button" className="button button--ghost" onClick={() => setSelectedActor(actor)}>
+        </div>
+
+        {actorsQuery.data?.items.length ? (
+          <>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Bio</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {actorsQuery.data.items.map((actor) => (
+                  <tr key={actor.id}>
+                    <td>{actor.full_name}</td>
+                    <td className="table-cell-clip" title={actor.bio ?? ""}>
+                      {truncateBio(actor.bio)}
+                    </td>
+                    <td className="actions-cell">
+                      <div className="button-row actors-actions">
+                        <button type="button" className="button button--ghost" onClick={() => openEditModal(actor)}>
                           Edit
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <Pagination
-                offset={actorsQuery.data.offset}
-                limit={actorsQuery.data.limit}
-                total={actorsQuery.data.total}
-                onChange={setOffset}
-              />
-            </>
-          ) : (
-            <StatusView title="No actors found" detail="Try a different query or create the first actor record." />
-          )}
-        </div>
-        <div className="panel panel--accent">
-          <div className="panel__header">
-            <h3>{selectedActor ? "Edit actor" : "Create actor"}</h3>
-            {selectedActor ? (
-              <button
-                type="button"
-                className="button button--ghost"
-                onClick={() => {
-                  setSelectedActor(null);
-                  form.reset(toFormValues(null));
-                }}
-              >
-                New form
+                        <button
+                          type="button"
+                          className="button button--danger"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Delete ${actor.full_name}?`)) {
+                              void deleteMutation.mutateAsync(actor.id);
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              offset={actorsQuery.data.offset}
+              limit={actorsQuery.data.limit}
+              total={actorsQuery.data.total}
+              onChange={setOffset}
+            />
+          </>
+        ) : (
+          <StatusView title="No actors found" detail="Try a different query or add the first actor record." />
+        )}
+      </section>
+
+      {isModalOpen ? (
+        <div className="modal-backdrop" onClick={closeModal}>
+          <div
+            className="modal-card panel"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="actor-modal-title"
+          >
+            <div className="panel__header">
+              <h3 id="actor-modal-title">{selectedActor ? "Edit actor" : "Add actor"}</h3>
+              <button type="button" className="button button--ghost" onClick={closeModal}>
+                Close
               </button>
-            ) : null}
-          </div>
-          <form className="stack-form" onSubmit={form.handleSubmit(onSubmit)}>
-            <FormField label="Full name" error={form.formState.errors.fullName?.message}>
-              <input className="input" {...form.register("fullName")} />
-            </FormField>
-            <FormField label="Photo URL" error={form.formState.errors.photoUrl?.message}>
-              <input className="input" {...form.register("photoUrl")} />
-            </FormField>
-            <FormField label="Bio" error={form.formState.errors.bio?.message}>
-              <textarea className="textarea" rows={6} {...form.register("bio")} />
-            </FormField>
-            {serverError ? <div className="alert alert--error">{serverError}</div> : null}
-            <div className="button-row">
-              <button className="button" type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                {selectedActor ? "Save actor" : "Create actor"}
-              </button>
-              {selectedActor ? (
-                <button
-                  type="button"
-                  className="button button--danger"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => {
-                    if (window.confirm("Delete this actor?")) {
-                      void deleteMutation.mutateAsync(selectedActor.id);
-                    }
-                  }}
-                >
-                  Delete
-                </button>
-              ) : null}
             </div>
-          </form>
+
+            <form className="stack-form" onSubmit={form.handleSubmit(onSubmit)}>
+              <FormField label="Name" error={form.formState.errors.fullName?.message}>
+                <input className="input" {...form.register("fullName")} />
+              </FormField>
+
+              <FormField
+                label="Photo Upload"
+                hint={selectedActor && !photoFile ? "Leave empty to keep the current photo." : undefined}
+              >
+                <input
+                  className="input input--file"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                />
+              </FormField>
+
+              <FormField label="Bio" error={form.formState.errors.bio?.message}>
+                <textarea className="textarea" rows={6} {...form.register("bio")} />
+              </FormField>
+
+              {serverError ? <div className="alert alert--error">{serverError}</div> : null}
+
+              <div className="button-row">
+                <button className="button" type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                  {createMutation.isPending || updateMutation.isPending ? "Saving..." : selectedActor ? "Save actor" : "Create actor"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }
