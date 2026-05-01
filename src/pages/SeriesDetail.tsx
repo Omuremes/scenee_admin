@@ -8,6 +8,7 @@ import { TextField } from '../components/TextField/TextField';
 import { TextArea } from '../components/TextArea/TextArea';
 import { MultiSelect } from '../components/MultiSelect/MultiSelect';
 import { SidePanel } from '../components/SidePanel/SidePanel';
+import { ImageUpload } from '../components/ImageUpload/ImageUpload';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { serialsService } from '../services/series';
@@ -48,7 +49,7 @@ export function SeriesDetail() {
   // overview
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [posterKey, setPosterKey] = useState('');
+  const [currentPosterUrl, setCurrentPosterUrl] = useState('');
   const [actorIds, setActorIds] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [savingOverview, setSavingOverview] = useState(false);
@@ -83,7 +84,7 @@ export function SeriesDetail() {
       setSerial(data);
       setName(data.name);
       setDescription(data.description || '');
-      setPosterKey(data.poster_key || '');
+      setCurrentPosterUrl(data.poster_url || '');
       setActorIds((data.actors || []).map((a) => a.id));
       setCategoryIds((data.categories || []).map((c) => c.id));
     } catch (err: any) {
@@ -125,7 +126,6 @@ export function SeriesDetail() {
       const updated = await serialsService.updateSerial(serialId, {
         name,
         description: description || undefined,
-        poster_key: posterKey || undefined,
         actors: actorIds,
         categories: categoryIds,
       });
@@ -135,6 +135,18 @@ export function SeriesDetail() {
       toast.error(err.message || 'Failed to update series');
     } finally {
       setSavingOverview(false);
+    }
+  };
+
+  const handlePosterUpload = async (file: File) => {
+    if (!serialId) return;
+    try {
+      const updated = await serialsService.uploadSerialPoster(serialId, file);
+      setSerial(updated);
+      setCurrentPosterUrl(updated.poster_url || '');
+      toast.success('Poster updated');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload poster');
     }
   };
 
@@ -322,11 +334,10 @@ export function SeriesDetail() {
               onChange={(e) => setName(e.target.value)}
               required
             />
-            <TextField
-              label="Poster key (object key in storage)"
-              value={posterKey}
-              onChange={(e) => setPosterKey(e.target.value)}
-              placeholder="e.g. serials/breaking-bad.jpg"
+            <ImageUpload
+              label="Poster"
+              onFileSelect={handlePosterUpload}
+              currentImageUrl={currentPosterUrl}
             />
             <MultiSelect
               label="Categories"

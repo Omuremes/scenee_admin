@@ -12,6 +12,7 @@ import { Pagination } from '../components/Pagination/Pagination';
 import { Toolbar } from '../components/Toolbar/Toolbar';
 import { Select } from '../components/Select/Select';
 import { MultiSelect } from '../components/MultiSelect/MultiSelect';
+import { ImageUpload } from '../components/ImageUpload/ImageUpload';
 import { Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
 import { serialsService } from '../services/series';
 import type { SerialListItem } from '../services/series';
@@ -44,6 +45,7 @@ export function Series() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [posterFile, setPosterFile] = useState<File | null>(null);
   const [selectedActors, setSelectedActors] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
@@ -96,6 +98,7 @@ export function Series() {
   const openCreatePanel = () => {
     setName('');
     setDescription('');
+    setPosterFile(null);
     setSelectedActors([]);
     setSelectedCategories([]);
     setIsPanelOpen(true);
@@ -111,6 +114,11 @@ export function Series() {
         actors: selectedActors,
         categories: selectedCategories,
       });
+      
+      if (posterFile) {
+        await serialsService.uploadSerialPoster(created.id, posterFile);
+      }
+
       toast.success('Series created');
       setIsPanelOpen(false);
       await fetchData();
@@ -250,6 +258,11 @@ export function Series() {
             onChange={(e) => setName(e.target.value)}
             required
             placeholder="e.g. Breaking Bad"
+          />
+          
+          <ImageUpload
+            label="Poster"
+            onFileSelect={setPosterFile}
           />
 
           <MultiSelect

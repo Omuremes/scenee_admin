@@ -59,7 +59,7 @@ export interface SerialDetail {
 export interface SerialCreate {
   name: string;
   description?: string;
-  poster_key?: string;
+  poster?: string;
   actors?: string[];
   categories?: string[];
 }
@@ -110,6 +110,12 @@ export const serialsService = {
 
   deleteSerial: (id: string) => api.delete<void>(`/admin/serials/${id}`),
 
+  uploadSerialPoster: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('poster', file);
+    return api.postForm<SerialDetail>(`/admin/serials/${id}/poster`, formData);
+  },
+
   addSeason: (serialId: string, data: SeasonCreate) =>
     api.post<SerialSeason>(`/admin/serials/${serialId}/seasons/`, data),
 
@@ -120,19 +126,19 @@ export const serialsService = {
     api.delete<void>(`/admin/serials/${serialId}/seasons/${seasonId}`),
 
   addEpisode: (seasonId: string, data: EpisodeCreate) =>
-    api.post<SerialEpisode>(`/admin/seasons/${seasonId}/episodes/`, data),
+    api.post<SerialEpisode>(`/admin/serials/seasons/${seasonId}/episodes/`, data),
 
   updateEpisode: (seasonId: string, episodeId: string, data: EpisodeUpdate) =>
-    api.patch<SerialEpisode>(`/admin/seasons/${seasonId}/episodes/${episodeId}`, data),
+    api.patch<SerialEpisode>(`/admin/serials/seasons/${seasonId}/episodes/${episodeId}`, data),
 
   deleteEpisode: (seasonId: string, episodeId: string) =>
-    api.delete<void>(`/admin/seasons/${seasonId}/episodes/${episodeId}`),
+    api.delete<void>(`/admin/serials/seasons/${seasonId}/episodes/${episodeId}`),
 
   uploadEpisodeVideo: (episodeId: string, file: File) => {
     const formData = new FormData();
     formData.append('video_file', file);
     return api.postForm<{ status: string; file_id: string }>(
-      `/admin/episodes/${episodeId}/upload`,
+      `/admin/serials/episodes/${episodeId}/upload`,
       formData,
     );
   },
