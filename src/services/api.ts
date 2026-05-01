@@ -20,14 +20,21 @@ export type QueryValue = string | number | boolean | undefined | null;
 export type QueryParams = Record<string, QueryValue>;
 
 export function buildQuery(params?: QueryParams): string {
-  if (!params) return '';
+  if (!params || Object.keys(params).length === 0) return '';
   const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') return;
-    search.append(key, String(value));
-  });
+  let hasValue = false;
+  
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      search.append(key, String(value));
+      hasValue = true;
+    }
+  }
+  
   const qs = search.toString();
-  return qs ? `?${qs}` : '';
+  if (!qs || !hasValue) return '';
+  
+  return qs.startsWith('?') ? qs : `?${qs}`;
 }
 
 interface FetchOptions extends Omit<RequestInit, 'body'> {
@@ -82,9 +89,16 @@ async function fetchApi<T>(endpoint: string, options: FetchOptions = {}): Promis
     return headers;
   };
 
-  const url = endpoint.startsWith('http')
-    ? endpoint
-    : `${API_ROOT}${endpoint}${buildQuery(query)}`;
+  const queryString = buildQuery(query);
+  let url = endpoint.startsWith('http') ? endpoint : `${API_ROOT}${endpoint}`;
+  
+  if (queryString) {
+    if (url.includes('?')) {
+      url += `&${queryString.substring(1)}`;
+    } else {
+      url += queryString;
+    }
+  }
 
   let token = tokenStorage.getAccess();
   let response = await fetch(url, { ...rest, headers: buildHeaders(token) });
@@ -115,7 +129,7 @@ async function fetchApi<T>(endpoint: string, options: FetchOptions = {}): Promis
     } catch {
       // ignore
     }
-    throw new Error(detail || `${response.status} ${response.statusText}`);
+    throw new Error(detail || `${response.status} ${response.statusText} (${url})`);
   }
 
   if (response.status === 204) return {} as T;

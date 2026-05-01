@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '../Button/Button';
 import { ConfirmContext } from './confirmContext';
@@ -25,8 +25,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const value = useMemo(() => ({ confirm }), [confirm]);
+
   return (
-    <ConfirmContext.Provider value={{ confirm }}>
+    <ConfirmContext.Provider value={value}>
       {children}
       {active && (
         <>

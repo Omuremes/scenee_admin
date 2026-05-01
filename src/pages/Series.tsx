@@ -113,7 +113,7 @@ export function Series() {
       });
       toast.success('Series created');
       setIsPanelOpen(false);
-      fetchData();
+      await fetchData();
       navigate(`/series/${created.id}`);
     } catch (err: any) {
       toast.error(err.message || 'Failed to create series');
