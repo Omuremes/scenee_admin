@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2, Upload } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader/PageHeader';
@@ -73,6 +73,8 @@ export function SeriesDetail() {
     description: '',
     duration: '',
   });
+  const [episodeVideoFile, setEpisodeVideoFile] = useState<File | null>(null);
+  const episodeVideoInputRef = useRef<HTMLInputElement>(null);
   const [savingEpisode, setSavingEpisode] = useState(false);
   const [uploadingEpisodeId, setUploadingEpisodeId] = useState<string | null>(null);
 
@@ -212,6 +214,8 @@ export function SeriesDetail() {
   const openEpisodePanel = (seasonId: string, episode?: SerialEpisode) => {
     setActiveSeasonId(seasonId);
     setEditingEpisode(episode || null);
+    setEpisodeVideoFile(null);
+    if (episodeVideoInputRef.current) episodeVideoInputRef.current.value = '';
     if (episode) {
       setEpisodeForm({
         episode_number: episode.episode_number,
@@ -240,9 +244,15 @@ export function SeriesDetail() {
       };
       if (editingEpisode) {
         await serialsService.updateEpisode(activeSeasonId, editingEpisode.id, payload);
+        if (episodeVideoFile) {
+          await serialsService.uploadEpisodeVideo(editingEpisode.id, episodeVideoFile);
+        }
         toast.success('Episode updated');
       } else {
-        await serialsService.addEpisode(activeSeasonId, payload);
+        const added = await serialsService.addEpisode(activeSeasonId, payload);
+        if (episodeVideoFile) {
+          await serialsService.uploadEpisodeVideo(added.id, episodeVideoFile);
+        }
         toast.success('Episode added');
       }
       setEpisodePanelOpen(false);
@@ -544,6 +554,28 @@ export function SeriesDetail() {
             value={episodeForm.description}
             onChange={(e) => setEpisodeForm({ ...episodeForm, description: e.target.value })}
           />
+
+          <div>
+            <label style={{ fontSize: '0.875rem', fontWeight: 500, display: 'block', marginBottom: '0.25rem' }}>
+              Video file (mp4 / mkv)
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input
+                ref={episodeVideoInputRef}
+                type="file"
+                accept="video/mp4,video/x-matroska"
+                onChange={(e) => setEpisodeVideoFile(e.target.files?.[0] || null)}
+                style={{ flex: 1, fontSize: '0.8125rem' }}
+              />
+              {episodeVideoFile && <Upload size={14} />}
+            </div>
+            {editingEpisode?.episode_file?.video_url && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                Current video: <a href={editingEpisode.episode_file.video_url} target="_blank" rel="noreferrer">open</a>
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
             <Button type="button" variant="secondary" onClick={() => setEpisodePanelOpen(false)}>
               Cancel
