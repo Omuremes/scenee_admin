@@ -9,19 +9,19 @@ import { SearchInput } from '../components/SearchInput/SearchInput';
 import { Pagination } from '../components/Pagination/Pagination';
 import { Toolbar } from '../components/Toolbar/Toolbar';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { movieCategoriesService } from '../services/movieCategories';
-import type { MovieCategory } from '../services/movieCategories';
+import { eventCategoriesService } from '../services/events';
+import type { EventCategory } from '../services/events';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { slugify } from '../utils/slugify';
 
 const PAGE_SIZE = 20;
 
-export function MovieCategories() {
+export function EventCategories() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const [items, setItems] = useState<MovieCategory[]>([]);
+  const [items, setItems] = useState<EventCategory[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState('');
@@ -30,7 +30,7 @@ export function MovieCategories() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [editing, setEditing] = useState<MovieCategory | null>(null);
+  const [editing, setEditing] = useState<EventCategory | null>(null);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
@@ -38,7 +38,7 @@ export function MovieCategories() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await movieCategoriesService.getMovieCategories({
+      const response = await eventCategoriesService.getCategories({
         query: search || undefined,
         offset,
         limit: PAGE_SIZE,
@@ -68,7 +68,7 @@ export function MovieCategories() {
     setIsPanelOpen(true);
   };
 
-  const handleEdit = (category: MovieCategory) => {
+  const handleEdit = (category: EventCategory) => {
     setEditing(category);
     setName(category.name);
     setSlug(category.slug || '');
@@ -76,12 +76,7 @@ export function MovieCategories() {
     setIsPanelOpen(true);
   };
 
-  const handleNameChange = (value: string) => {
-    setName(value);
-    if (!slugTouched) setSlug(slugify(value));
-  };
-
-  const handleDelete = async (category: MovieCategory) => {
+  const handleDelete = async (category: EventCategory) => {
     const ok = await confirm({
       title: 'Delete category',
       message: `Delete category "${category.name}"?`,
@@ -90,12 +85,17 @@ export function MovieCategories() {
     });
     if (!ok) return;
     try {
-      await movieCategoriesService.deleteMovieCategory(category.id);
+      await eventCategoriesService.deleteCategory(category.id);
       toast.success('Category deleted');
       fetchData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete category');
     }
+  };
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    if (!slugTouched) setSlug(slugify(value));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,13 +104,12 @@ export function MovieCategories() {
     try {
       const payload = { name, slug: slug || undefined };
       if (editing) {
-        await movieCategoriesService.updateMovieCategory(editing.id, payload);
+        await eventCategoriesService.updateCategory(editing.id, payload);
       } else {
-        await movieCategoriesService.createMovieCategory(payload);
+        await eventCategoriesService.createCategory(payload);
       }
       toast.success(editing ? 'Category updated' : 'Category created');
       setIsPanelOpen(false);
-      setEditing(null);
       fetchData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save category');
@@ -119,7 +118,7 @@ export function MovieCategories() {
     }
   };
 
-  const columns: Column<MovieCategory>[] = [
+  const columns: Column<EventCategory>[] = [
     { key: 'name', header: 'Name' },
     { key: 'slug', header: 'Slug' },
     {
@@ -151,8 +150,8 @@ export function MovieCategories() {
   return (
     <div>
       <PageHeader
-        title="Movie categories"
-        subtitle="Manage genres and categories for movies"
+        title="Event categories"
+        subtitle="Categorize your events for filtering"
         action={
           <Button onClick={openCreatePanel}>
             <Plus size={16} /> Add category
@@ -178,7 +177,7 @@ export function MovieCategories() {
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
             required
-            placeholder="e.g. Science Fiction"
+            placeholder="e.g. Concert"
           />
           <TextField
             label="Slug (optional)"
@@ -187,7 +186,7 @@ export function MovieCategories() {
               setSlug(e.target.value);
               setSlugTouched(true);
             }}
-            placeholder="e.g. sci-fi"
+            placeholder="e.g. concert"
           />
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
             <Button type="button" variant="secondary" onClick={() => setIsPanelOpen(false)}>

@@ -1,4 +1,5 @@
 import { api } from './api';
+import type { PageResponse } from './api';
 
 export interface MovieCategory {
   id: string;
@@ -13,17 +14,28 @@ export interface MovieCategoryCreate {
 
 export type MovieCategoryUpdate = Partial<MovieCategoryCreate>;
 
-export interface MovieCategoryPageResponse {
-  items: MovieCategory[];
-  total: number;
-  offset: number;
-  limit: number;
-  has_more: boolean;
+export interface MovieCategoriesQuery {
+  query?: string;
+  offset?: number;
+  limit?: number;
 }
 
 export const movieCategoriesService = {
-  getMovieCategories: () => api.get<MovieCategoryPageResponse>('/admin/movies/categories'),
-  createMovieCategory: (data: MovieCategoryCreate) => api.post<MovieCategory>('/admin/movies/categories', data),
-  updateMovieCategory: (id: string, data: MovieCategoryUpdate) => api.patch<MovieCategory>(`/admin/movies/categories/${id}`, data),
-  deleteMovieCategory: (id: string) => api.delete<void>(`/admin/movies/categories/${id}`),
+  getMovieCategories: (params: MovieCategoriesQuery = {}) =>
+    api.get<PageResponse<MovieCategory>>('/admin/movies/categories', {
+      query: {
+        query: params.query,
+        offset: params.offset,
+        limit: params.limit,
+      },
+    }),
+
+  createMovieCategory: (data: MovieCategoryCreate) =>
+    api.post<MovieCategory>('/admin/movies/categories', data),
+
+  updateMovieCategory: (id: string, data: MovieCategoryUpdate) =>
+    api.patch<MovieCategory>(`/admin/movies/categories/${id}`, data),
+
+  deleteMovieCategory: (id: string) =>
+    api.delete<void>(`/admin/movies/categories/${id}`),
 };

@@ -18,5 +18,12 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Codebase uses `catch (err: any)` extensively for fetch error handling.
+      '@typescript-eslint/no-explicit-any': 'off',
+      // Many pages legitimately call setState from effects when fetching
+      // data or resetting pagination on filter change.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

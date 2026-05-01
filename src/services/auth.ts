@@ -1,4 +1,4 @@
-import { api } from './api';
+import { api, tokenStorage } from './api';
 
 export interface TokenResponse {
   access_token: string;
@@ -18,20 +18,16 @@ export interface UserResponse {
 export const authService = {
   login: async (email: string, password: string): Promise<TokenResponse> => {
     const response = await api.post<TokenResponse>('/auth/login', { email, password });
-    localStorage.setItem('token', response.access_token);
+    tokenStorage.setTokens(response.access_token, response.refresh_token);
     return response;
   },
-  
+
   logout: () => {
-    localStorage.removeItem('token');
+    tokenStorage.clear();
     window.location.href = '/login';
   },
-  
-  getMe: (): Promise<UserResponse> => {
-    return api.get<UserResponse>('/auth/me');
-  },
-  
-  isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('token');
-  }
+
+  getMe: (): Promise<UserResponse> => api.get<UserResponse>('/auth/me'),
+
+  isAuthenticated: (): boolean => !!tokenStorage.getAccess(),
 };

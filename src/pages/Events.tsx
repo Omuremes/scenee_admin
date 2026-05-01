@@ -1,241 +1,356 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { DataTable } from '../components/DataTable/DataTable';
 import type { Column } from '../components/DataTable/DataTable';
 import { Button } from '../components/Button/Button';
 import { SidePanel } from '../components/SidePanel/SidePanel';
 import { TextField } from '../components/TextField/TextField';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { eventsService } from '../services/events';
-import type { Event } from '../services/events';
+import { TextArea } from '../components/TextArea/TextArea';
+import { Select } from '../components/Select/Select';
+import { SearchInput } from '../components/SearchInput/SearchInput';
+import { Pagination } from '../components/Pagination/Pagination';
+import { Toolbar } from '../components/Toolbar/Toolbar';
+import {
+  eventsService,
+  eventCategoriesService,
+  EVENT_TYPES,
+} from '../services/events';
+import type {
+  EventListItem,
+  EventCategory,
+  EventType,
+} from '../services/events';
+import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
+
+const PAGE_SIZE = 20;
 
 export function Events() {
-  const [events, setEvents] = useState<Event[]>([]);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const navigate = useNavigate();
+
+  const [items, setItems] = useState<EventListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [city, setCity] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+
+  const [categories, setCategories] = useState<EventCategory[]>([]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-
-  // Form state
   const [title, setTitle] = useState('');
-  const [city, setCity] = useState('');
-  const [type, setType] = useState('events');
-  const [posterUrl, setPosterUrl] = useState('');
   const [description, setDescription] = useState('');
+  const [type, setType] = useState<EventType>('events');
+  const [posterUrl, setPosterUrl] = useState('');
+  const [trailerUrl, setTrailerUrl] = useState('');
+  const [formCity, setFormCity] = useState('');
+  const [formCategory, setFormCategory] = useState('');
+  const [isActive, setIsActive] = useState(true);
 
-  const fetchEvents = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await eventsService.getEvents();
-      setEvents(response.items || []);
+      const response = await eventsService.getEvents({
+        type: (typeFilter || undefined) as EventType | undefined,
+        city: city || undefined,
+        category_id: categoryFilter || undefined,
+        offset,
+        limit: PAGE_SIZE,
+      });
+      setItems(response.items || []);
+      setTotal(response.total || 0);
     } catch (err: any) {
-      console.error('Failed to fetch events', err);
+      toast.error(err.message || 'Failed to fetch events');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [typeFilter, city, categoryFilter, offset, toast]);
 
   useEffect(() => {
-    fetchEvents();
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    setOffset(0);
+  }, [typeFilter, city, categoryFilter]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const cats = await eventCategoriesService.getCategories({ limit: 100 });
+        if (alive) setCategories(cats.items || []);
+      } catch {
+        // categories list might be empty
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  useEffect(() => {
-    if (editingEvent) {
-      setTitle(editingEvent.title);
-      setCity(editingEvent.city);
-      setType(editingEvent.type || editingEvent.event_type || 'events');
-      setPosterUrl(editingEvent.poster_url || editingEvent.image_url || '');
-      setDescription(editingEvent.description || '');
-    } else {
-      setTitle('');
-      setCity('');
-      setType('events');
-      setPosterUrl('');
-      setDescription('');
-    }
-  }, [editingEvent]);
+  const openCreatePanel = () => {
+    setTitle('');
+    setDescription('');
+    setType('events');
+    setPosterUrl('');
+    setTrailerUrl('');
+    setFormCity('');
+    setFormCategory('');
+    setIsActive(true);
+    setIsPanelOpen(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setIsSubmitting(true);
     try {
-      const data = { 
+      const created = await eventsService.createEvent({
         title,
-        city,
-        type,
-        poster_url: posterUrl || undefined,
         description: description || undefined,
-        is_active: true
-      };
-
-      if (editingEvent) {
-        await eventsService.updateEvent(editingEvent.id, data);
-      } else {
-        await eventsService.createEvent(data);
-      }
-
+        type,
+        city: formCity,
+        poster_url: posterUrl || undefined,
+        trailer_url: trailerUrl || undefined,
+        category_id: formCategory || undefined,
+        is_active: isActive,
+      });
+      toast.success('Event created');
       setIsPanelOpen(false);
-      setEditingEvent(null);
-      fetchEvents();
+      fetchData();
+      navigate(`/events/${created.id}`);
     } catch (err: any) {
-      setError(err.message || 'Failed to save event');
+      toast.error(err.message || 'Failed to create event');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEdit = (event: Event) => {
-    setEditingEvent(event);
-    setIsPanelOpen(true);
-  };
-
-  const handleDelete = async (event: Event) => {
-    if (!window.confirm(`Are you sure you want to delete the event "${event.title}"?`)) {
-      return;
-    }
-    
+  const handleDelete = async (event: EventListItem) => {
+    const ok = await confirm({
+      title: 'Delete event',
+      message: `Delete "${event.title}"?`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await eventsService.deleteEvent(event.id);
-      fetchEvents();
+      toast.success('Event deleted');
+      fetchData();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete event');
+      toast.error(err.message || 'Failed to delete event');
     }
   };
 
-  const openCreatePanel = () => {
-    setEditingEvent(null);
-    setIsPanelOpen(true);
+  const handleToggleActive = async (event: EventListItem) => {
+    try {
+      await eventsService.setActive(event.id, !event.is_active);
+      toast.success(`Event ${!event.is_active ? 'activated' : 'deactivated'}`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update event status');
+    }
   };
 
-  const columns: Column<Event>[] = [
+  const typeOptions = useMemo(
+    () => [{ value: '', label: 'All types' }, ...EVENT_TYPES.map((t) => ({ value: t.value, label: t.label }))],
+    [],
+  );
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: '', label: 'All categories' },
+      ...categories.map((c) => ({ value: c.id, label: c.name })),
+    ],
+    [categories],
+  );
+
+  const columns: Column<EventListItem>[] = [
+    {
+      key: 'poster_url',
+      header: 'Poster',
+      render: (item) => {
+        const url = item.poster_url || item.image_url;
+        return url ? (
+          <img
+            src={url}
+            alt={item.title}
+            style={{ width: 36, height: 52, objectFit: 'cover', borderRadius: 'var(--radius-sm)' }}
+          />
+        ) : (
+          <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+        );
+      },
+    },
     { key: 'title', header: 'Title' },
+    { key: 'type', header: 'Type' },
     { key: 'city', header: 'City' },
-    { key: 'type', header: 'Type', render: (item) => item.type || item.event_type || 'events' },
-    { 
-      key: 'poster_url', 
-      header: 'Poster', 
-      render: (item) => (item.poster_url || item.image_url) ? (
-        <img src={item.poster_url || item.image_url} alt={item.title} style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', objectFit: 'cover' }} />
-      ) : 'No photo'
+    {
+      key: 'is_active',
+      header: 'Active',
+      render: (item) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); handleToggleActive(item); }}
+          style={{
+            padding: '2px 10px',
+            borderRadius: 999,
+            border: '1px solid',
+            borderColor: item.is_active ? 'var(--color-success)' : 'var(--color-border-light)',
+            color: item.is_active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+            backgroundColor: 'transparent',
+            fontSize: '0.75rem',
+            cursor: 'pointer',
+          }}
+        >
+          {item.is_active ? 'Active' : 'Inactive'}
+        </button>
+      ),
     },
     {
       key: 'actions',
       header: 'Actions',
       render: (item) => (
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button 
-            onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
-            style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', padding: '4px' }}
-            title="Edit Event"
+          <button
+            onClick={(e) => { e.stopPropagation(); navigate(`/events/${item.id}`); }}
+            style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', padding: 4 }}
+            title="Open"
+            type="button"
+          >
+            <ExternalLink size={16} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); navigate(`/events/${item.id}`); }}
+            style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', padding: 4 }}
+            title="Edit"
+            type="button"
           >
             <Pencil size={16} />
           </button>
-          <button 
+          <button
             onClick={(e) => { e.stopPropagation(); handleDelete(item); }}
-            style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '4px' }}
-            title="Delete Event"
+            style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 4 }}
+            title="Delete"
+            type="button"
           >
             <Trash2 size={16} />
           </button>
         </div>
-      )
-    }
+      ),
+    },
   ];
 
   return (
     <div>
-      <PageHeader 
-        title="Events" 
-        subtitle="Manage local events and sessions"
+      <PageHeader
+        title="Events"
+        subtitle="Manage local events, sessions and seating"
         action={
           <Button onClick={openCreatePanel}>
-            <Plus size={16} /> Add Event
+            <Plus size={16} /> Add event
           </Button>
         }
       />
 
-      <DataTable 
-        data={events} 
-        columns={columns} 
-        keyExtractor={(item) => item.id} 
-        isLoading={isLoading}
-      />
+      <Toolbar>
+        <SearchInput value={city} onChange={setCity} placeholder="Filter by city..." />
+        <Select
+          label="Type"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          options={typeOptions}
+        />
+        <Select
+          label="Category"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          options={categoryOptions}
+        />
+      </Toolbar>
 
-      <SidePanel 
-        isOpen={isPanelOpen} 
-        onClose={() => setIsPanelOpen(false)} 
-        title={editingEvent ? "Edit Event" : "Add New Event"}
+      <DataTable
+        data={items}
+        columns={columns}
+        keyExtractor={(item) => item.id}
+        isLoading={isLoading}
+        onRowClick={(item) => navigate(`/events/${item.id}`)}
+      />
+      <Pagination total={total} offset={offset} limit={PAGE_SIZE} onChange={setOffset} />
+
+      <SidePanel
+        isOpen={isPanelOpen}
+        onClose={() => setIsPanelOpen(false)}
+        title="Add new event"
       >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {error && <div style={{ color: 'var(--color-danger)', fontSize: '0.875rem' }}>{error}</div>}
-          
-          <TextField 
-            label="Title" 
+          <TextField
+            label="Title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
             placeholder="e.g. Summer Music Festival"
           />
-
-          <TextField 
-            label="City" 
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
+          <Select
+            label="Type"
+            value={type}
+            onChange={(e) => setType(e.target.value as EventType)}
+            options={EVENT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+            required
+          />
+          <TextField
+            label="City"
+            value={formCity}
+            onChange={(e) => setFormCity(e.target.value)}
             required
             placeholder="e.g. New York"
           />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Type</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              style={{
-                padding: 'var(--spacing-2) var(--spacing-3)',
-                border: '1px solid var(--color-border-light)',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.875rem',
-                backgroundColor: 'var(--color-surface)',
-                outline: 'none'
-              }}
-            >
-              <option value="events">Event</option>
-              <option value="concerts">Concert</option>
-              <option value="theatre">Theatre</option>
-            </select>
-          </div>
-
-          <TextField 
-            label="Poster URL" 
+          <Select
+            label="Category"
+            value={formCategory}
+            onChange={(e) => setFormCategory(e.target.value)}
+            options={[{ value: '', label: '— None —' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+          />
+          <TextField
+            label="Poster URL"
             value={posterUrl}
             onChange={(e) => setPosterUrl(e.target.value)}
             placeholder="https://..."
           />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Description</label>
-            <textarea 
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              style={{
-                padding: '0.5rem 0.75rem',
-                border: '1px solid var(--color-border-light)',
-                borderRadius: 'var(--radius-md)',
-                minHeight: '100px',
-                fontFamily: 'inherit',
-                fontSize: '0.875rem'
-              }}
-              placeholder="Event description..."
+          <TextField
+            label="Trailer URL"
+            value={trailerUrl}
+            onChange={(e) => setTrailerUrl(e.target.value)}
+            placeholder="https://..."
+          />
+          <TextArea
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
             />
-          </div>
+            Active (visible in app)
+          </label>
 
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-            <Button type="button" variant="secondary" onClick={() => setIsPanelOpen(false)}>Cancel</Button>
+            <Button type="button" variant="secondary" onClick={() => setIsPanelOpen(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : (editingEvent ? 'Save Changes' : 'Create Event')}
+              {isSubmitting ? 'Creating...' : 'Create & open'}
             </Button>
           </div>
         </form>

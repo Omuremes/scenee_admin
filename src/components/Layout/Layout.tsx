@@ -1,13 +1,20 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Film, Users, Clapperboard, Home, Tag, Calendar, LogOut } from 'lucide-react';
+import { Film, Users, Clapperboard, Home, Tag, Calendar, CalendarRange, LogOut } from 'lucide-react';
 import { authService } from '../../services/auth';
+import { useConfirm } from '../ConfirmDialog';
 import styles from './Layout.module.css';
 
 export function Layout() {
-  const handleLogout = () => {
-    if (window.confirm('Are you sure you want to log out?')) {
-      authService.logout();
-    }
+  const confirm = useConfirm();
+
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: 'Sign out',
+      message: 'Are you sure you want to log out?',
+      confirmLabel: 'Sign out',
+      variant: 'danger',
+    });
+    if (ok) authService.logout();
   };
 
   return (
@@ -17,61 +24,68 @@ export function Layout() {
           <span className={styles.logoText}>CineScope</span>
           <span className={styles.logoSub}>Admin</span>
         </div>
-        
+
         <nav className={styles.nav}>
-          <NavLink 
-            to="/" 
+          <NavLink
+            to="/"
             className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
             end
           >
             <Home size={18} />
             Dashboard
           </NavLink>
-          <NavLink 
-            to="/movies" 
+          <NavLink
+            to="/movies"
             className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
           >
             <Film size={18} />
             Movies
           </NavLink>
-          <NavLink 
-            to="/movie-categories" 
+          <NavLink
+            to="/movie-categories"
             className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
           >
             <Tag size={18} />
-            Movie Categories
+            Movie categories
           </NavLink>
-          <NavLink 
-            to="/actors" 
+          <NavLink
+            to="/actors"
             className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
           >
             <Users size={18} />
             Actors
           </NavLink>
-          <NavLink 
-            to="/series" 
+          <NavLink
+            to="/series"
             className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
           >
             <Clapperboard size={18} />
             Series
           </NavLink>
-          <NavLink 
-            to="/events" 
+          <NavLink
+            to="/events"
             className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
           >
             <Calendar size={18} />
             Events
           </NavLink>
+          <NavLink
+            to="/event-categories"
+            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
+          >
+            <CalendarRange size={18} />
+            Event categories
+          </NavLink>
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <button onClick={handleLogout} className={styles.logoutBtn}>
+          <button onClick={handleLogout} className={styles.logoutBtn} type="button">
             <LogOut size={18} />
-            Log Out
+            Log out
           </button>
         </div>
       </aside>
-      
+
       <main className={styles.main}>
         <div className={styles.content}>
           <Outlet />
@@ -80,4 +94,3 @@ export function Layout() {
     </div>
   );
 }
-
