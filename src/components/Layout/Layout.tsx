@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Film, Users, Clapperboard, Home, Tag, Calendar, CalendarRange, LogOut } from 'lucide-react';
+import { Users, Clapperboard, Home, Tag, Calendar, CalendarRange, LogOut } from 'lucide-react';
 import { authService } from '../../services/auth';
 import { useConfirm } from '../ConfirmDialog';
 import styles from './Layout.module.css';
@@ -33,13 +33,6 @@ export function Layout() {
           >
             <Home size={18} />
             Dashboard
-          </NavLink>
-          <NavLink
-            to="/movies"
-            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-          >
-            <Film size={18} />
-            Movies
           </NavLink>
           <NavLink
             to="/movie-categories"

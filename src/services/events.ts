@@ -1,11 +1,7 @@
 import { api } from './api';
 import type { PageResponse } from './api';
 
-// NOTE: backend has a typo in admin events router prefix:
-// scenee_backend/app/routers/events.py:35 -> "/v1admin/events" (no slash before admin).
-// We intentionally hit `admin/events` (no leading slash) so it concatenates with
-// API_ROOT (".../v1") into ".../v1admin/events".
-const ADMIN_EVENTS = 'admin/events';
+const ADMIN_EVENTS = '/admin/events';
 
 export type EventType =
   | 'cinema'
@@ -99,11 +95,17 @@ export interface EventCreateInput {
   city: string;
   category_id?: string;
   is_active?: boolean;
+  start_datetime?: string;
+  end_datetime?: string;
+  venue_id?: string;
+  price?: number;
+  max_capacity?: number;
 }
 
 export type EventUpdateInput = Partial<EventCreateInput>;
 
 export interface EventsQuery {
+  query?: string;
   type?: EventType;
   city?: string;
   category_id?: string;
@@ -115,6 +117,7 @@ export const eventsService = {
   getEvents: (params: EventsQuery = {}) =>
     api.get<PageResponse<EventListItem>>(`${ADMIN_EVENTS}/`, {
       query: {
+        query: params.query,
         type: params.type,
         city: params.city,
         category_id: params.category_id,
@@ -127,6 +130,18 @@ export const eventsService = {
 
   createEvent: (data: EventCreateInput) =>
     api.post<EventDetail>(`${ADMIN_EVENTS}/`, data),
+
+  uploadEventPoster: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('poster', file);
+    return api.postForm<EventDetail>(`${ADMIN_EVENTS}/${id}/poster`, formData);
+  },
+
+  uploadEventTrailer: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('trailer', file);
+    return api.postForm<EventDetail>(`${ADMIN_EVENTS}/${id}/trailer`, formData);
+  },
 
   updateEvent: (id: string, data: EventUpdateInput) =>
     api.patch<EventDetail>(`${ADMIN_EVENTS}/${id}`, data),

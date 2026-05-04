@@ -1,360 +1,549 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
-import { PageHeader } from '../components/PageHeader/PageHeader';
-import { DataTable } from '../components/DataTable/DataTable';
-import type { Column } from '../components/DataTable/DataTable';
+import { ArrowRight, Edit2, Plus, Trash2, Upload } from 'lucide-react';
+
 import { Button } from '../components/Button/Button';
-import { SidePanel } from '../components/SidePanel/SidePanel';
-import { TextField } from '../components/TextField/TextField';
-import { TextArea } from '../components/TextArea/TextArea';
-import { Select } from '../components/Select/Select';
-import { SearchInput } from '../components/SearchInput/SearchInput';
+import { DataTable } from '../components/DataTable/DataTable';
+import { ImageUpload } from '../components/ImageUpload/ImageUpload';
+import { PageHeader } from '../components/PageHeader/PageHeader';
 import { Pagination } from '../components/Pagination/Pagination';
-import { Toolbar } from '../components/Toolbar/Toolbar';
+import { SearchInput } from '../components/SearchInput/SearchInput';
+import { SidePanel } from '../components/SidePanel/SidePanel';
+import { TextArea } from '../components/TextArea/TextArea';
+import { TextField } from '../components/TextField/TextField';
+import { useToast } from '../components/Toast/useToast';
+import { useConfirm } from '../components/ConfirmDialog/useConfirm';
+import styles from './Events.module.css';
 import {
-  eventsService,
   eventCategoriesService,
-  EVENT_TYPES,
+  eventsService,
+  type EventCategory,
+  type EventCreateInput,
+  type EventListItem,
+  type EventType,
 } from '../services/events';
-import type {
-  EventListItem,
-  EventCategory,
-  EventType,
-} from '../services/events';
-import { useToast } from '../components/Toast';
-import { useConfirm } from '../components/ConfirmDialog';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 12;
+const EVENT_TYPES: EventType[] = ['cinema', 'concerts', 'stand-up', 'sports', 'kids', 'events'];
 
-export function Events() {
-  const toast = useToast();
-  const confirm = useConfirm();
+type EventFormState = {
+  title: string;
+  description: string;
+  type: EventType;
+  city: string;
+  categoryId: string;
+  startDateTime: string;
+  endDateTime: string;
+  venueId: string;
+  price: string;
+  maxCapacity: string;
+  isActive: boolean;
+};
+
+const DEFAULT_FORM_STATE: EventFormState = {
+  title: '',
+  description: '',
+  type: 'cinema',
+  city: '',
+  categoryId: '',
+  startDateTime: '',
+  endDateTime: '',
+  venueId: '',
+  price: '',
+  maxCapacity: '',
+  isActive: true,
+};
+
+const TYPE_COPY: Record<EventType, { title: string; description: string; accent: string; showVenue: boolean; showPrice: boolean; showCapacity: boolean }> = {
+  cinema: {
+    title: 'Cinema event',
+    description: 'Use schedule, pricing and capacity fields for premieres, screenings and special showings.',
+    accent: '#c84b31',
+    showVenue: false,
+    showPrice: true,
+    showCapacity: true,
+  },
+  concerts: {
+    title: 'Concert',
+    description: 'Fill in the time window and ticketing fields for live shows and music nights.',
+    accent: '#126b8a',
+    showVenue: false,
+    showPrice: true,
+    showCapacity: true,
+  },
+  'stand-up': {
+    title: 'Stand-up',
+    description: 'Good for comedy nights and small-format shows with seating capacity.',
+    accent: '#7a4f01',
+    showVenue: false,
+    showPrice: true,
+    showCapacity: true,
+  },
+  sports: {
+    title: 'Sports event',
+    description: 'Use it for matches, tournaments and watch parties.',
+    accent: '#0f766e',
+    showVenue: false,
+    showPrice: true,
+    showCapacity: true,
+  },
+  kids: {
+    title: 'Kids event',
+    description: 'Family-focused sessions lean on venue details instead of ticketing fields.',
+    accent: '#8a4dff',
+    showVenue: true,
+    showPrice: false,
+    showCapacity: false,
+  },
+  events: {
+    title: 'General event',
+    description: 'Use this for everything that is not tied to a fixed ticketing model.',
+    accent: '#b54708',
+    showVenue: true,
+    showPrice: false,
+    showCapacity: false,
+  },
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+  return new Intl.DateTimeFormat('en', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+};
+
+const parseNumberOrUndefined = (value: string) => {
+  if (!value.trim()) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
+const buildPayload = (form: EventFormState): EventCreateInput => ({
+  title: form.title.trim(),
+  description: form.description.trim() || undefined,
+  type: form.type,
+  city: form.city.trim(),
+  category_id: form.categoryId || undefined,
+  is_active: form.isActive,
+  start_datetime: form.startDateTime ? new Date(form.startDateTime).toISOString() : undefined,
+  end_datetime: form.endDateTime ? new Date(form.endDateTime).toISOString() : undefined,
+  venue_id: form.venueId.trim() || undefined,
+  price: parseNumberOrUndefined(form.price),
+  max_capacity: parseNumberOrUndefined(form.maxCapacity),
+});
+
+export default function EventsPage() {
   const navigate = useNavigate();
-
-  const [items, setItems] = useState<EventListItem[]>([]);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [events, setEvents] = useState<EventListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [city, setCity] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-
+  const [query, setQuery] = useState('');
+  const [activeCategoryId, setActiveCategoryId] = useState<string>('');
   const [categories, setCategories] = useState<EventCategory[]>([]);
-
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState<EventFormState>(DEFAULT_FORM_STATE);
+  const [posterFile, setPosterFile] = useState<File | null>(null);
+  const [trailerFile, setTrailerFile] = useState<File | null>(null);
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [type, setType] = useState<EventType>('events');
-  const [posterUrl, setPosterUrl] = useState('');
-  const [trailerUrl, setTrailerUrl] = useState('');
-  const [formCity, setFormCity] = useState('');
-  const [formCategory, setFormCategory] = useState('');
-  const [isActive, setIsActive] = useState(true);
+  const activeTypeCopy = TYPE_COPY[form.type];
+  const activeCategory = useMemo(
+    () => categories.find((category) => category.id === activeCategoryId) ?? null,
+    [activeCategoryId, categories],
+  );
 
-  const fetchData = useCallback(async () => {
+  const loadCategories = useCallback(async () => {
+    try {
+      const response = await eventCategoriesService.getCategories({ limit: 100 });
+      setCategories(response.items);
+    } catch (error) {
+      console.error('Failed to load event categories', error);
+    }
+  }, []);
+
+  const loadEvents = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await eventsService.getEvents({
-        type: (typeFilter || undefined) as EventType | undefined,
-        city: city || undefined,
-        category_id: categoryFilter || undefined,
+        query: query.trim() || undefined,
+        category_id: activeCategoryId || undefined,
         offset,
         limit: PAGE_SIZE,
       });
-      setItems(response.items || []);
-      setTotal(response.total || 0);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to fetch events');
+      setEvents(response.items);
+      setTotal(response.total);
+    } catch (error) {
+      console.error('Failed to load events', error);
+      toast.error('Unable to load events');
     } finally {
       setIsLoading(false);
     }
-  }, [typeFilter, city, categoryFilter, offset, toast]);
+  }, [activeCategoryId, offset, query, toast]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    loadCategories();
+  }, [loadCategories]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
   useEffect(() => {
     setOffset(0);
-  }, [typeFilter, city, categoryFilter]);
+  }, [query, activeCategoryId]);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const cats = await eventCategoriesService.getCategories({ limit: 100 });
-        if (alive) setCategories(cats.items || []);
-      } catch {
-        // categories list might be empty
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+  const resetForm = useCallback(() => {
+    setForm(DEFAULT_FORM_STATE);
+    setPosterFile(null);
+    setTrailerFile(null);
   }, []);
 
   const openCreatePanel = () => {
-    setTitle('');
-    setDescription('');
-    setType('events');
-    setPosterUrl('');
-    setTrailerUrl('');
-    setFormCity('');
-    setFormCategory('');
-    setIsActive(true);
+    resetForm();
     setIsPanelOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const created = await eventsService.createEvent({
-        title,
-        description: description || undefined,
-        type,
-        city: formCity,
-        poster_url: posterUrl || undefined,
-        trailer_url: trailerUrl || undefined,
-        category_id: formCategory || undefined,
-        is_active: isActive,
-      });
-      toast.success('Event created');
-      setIsPanelOpen(false);
-      fetchData();
-      navigate(`/events/${created.id}`);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create event');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (event: EventListItem) => {
-    const ok = await confirm({
+  const handleDelete = async (eventItem: EventListItem) => {
+    const confirmed = await confirm({
       title: 'Delete event',
-      message: `Delete "${event.title}"?`,
+      message: `Delete ${eventItem.title}? This action cannot be undone.`,
       confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
       variant: 'danger',
     });
-    if (!ok) return;
+
+    if (!confirmed) {
+      return;
+    }
+
     try {
-      await eventsService.deleteEvent(event.id);
+      await eventsService.deleteEvent(eventItem.id);
       toast.success('Event deleted');
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete event');
+      await loadEvents();
+    } catch (error) {
+      console.error('Failed to delete event', error);
+      toast.error('Unable to delete event');
     }
   };
 
-  const handleToggleActive = async (event: EventListItem) => {
+  const submitCreate = async () => {
+    if (!form.title.trim() || !form.city.trim()) {
+      toast.error('Title and city are required');
+      return;
+    }
+
+    if (!posterFile || !trailerFile) {
+      toast.error('Poster and trailer files are required');
+      return;
+    }
+
+    setIsSaving(true);
     try {
-      await eventsService.setActive(event.id, !event.is_active);
-      toast.success(`Event ${!event.is_active ? 'activated' : 'deactivated'}`);
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update event status');
+      const created = await eventsService.createEvent(buildPayload(form));
+      const withPoster = await eventsService.uploadEventPoster(created.id, posterFile);
+      const withTrailer = await eventsService.uploadEventTrailer(withPoster.id, trailerFile);
+      toast.success('Event created');
+      setIsPanelOpen(false);
+      resetForm();
+      await loadEvents();
+      navigate(`/events/${withTrailer.id}`);
+    } catch (error) {
+      console.error('Failed to create event', error);
+      toast.error('Unable to create event');
+    } finally {
+      setIsSaving(false);
     }
   };
-
-  const typeOptions = useMemo(
-    () => [{ value: '', label: 'All types' }, ...EVENT_TYPES.map((t) => ({ value: t.value, label: t.label }))],
-    [],
-  );
-
-  const categoryOptions = useMemo(
-    () => [
-      { value: '', label: 'All categories' },
-      ...categories.map((c) => ({ value: c.id, label: c.name })),
-    ],
-    [categories],
-  );
-
-  const columns: Column<EventListItem>[] = [
-    {
-      key: 'poster_url',
-      header: 'Poster',
-      render: (item) => {
-        const url = item.poster_url || item.image_url;
-        return url ? (
-          <img
-            src={url}
-            alt={item.title}
-            style={{ width: 36, height: 52, objectFit: 'cover', borderRadius: 'var(--radius-sm)' }}
-          />
-        ) : (
-          <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
-        );
-      },
-    },
-    { key: 'title', header: 'Title' },
-    { key: 'type', header: 'Type' },
-    { key: 'city', header: 'City' },
-    {
-      key: 'is_active',
-      header: 'Active',
-      render: (item) => (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); handleToggleActive(item); }}
-          style={{
-            padding: '2px 10px',
-            borderRadius: 999,
-            border: '1px solid',
-            borderColor: item.is_active ? 'var(--color-success)' : 'var(--color-border-light)',
-            color: item.is_active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
-            backgroundColor: 'transparent',
-            fontSize: '0.75rem',
-            cursor: 'pointer',
-          }}
-        >
-          {item.is_active ? 'Active' : 'Inactive'}
-        </button>
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (item) => (
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); navigate(`/events/${item.id}`); }}
-            style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', padding: 4 }}
-            title="Open"
-            type="button"
-          >
-            <ExternalLink size={16} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); navigate(`/events/${item.id}`); }}
-            style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', padding: 4 }}
-            title="Edit"
-            type="button"
-          >
-            <Pencil size={16} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleDelete(item); }}
-            style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 4 }}
-            title="Delete"
-            type="button"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      ),
-    },
-  ];
 
   return (
-    <div>
+    <div className={`page-shell ${styles.page}`}>
       <PageHeader
         title="Events"
-        subtitle="Manage local events, sessions and seating"
-        action={
-          <Button onClick={openCreatePanel}>
-            <Plus size={16} /> Add event
+        subtitle="Search, filter and create events with file uploads for poster and trailer media."
+        action={(
+          <Button variant="primary" onClick={openCreatePanel} className={styles.primaryAction}>
+            <Plus size={16} /> New event
           </Button>
-        }
+        )}
       />
 
-      <Toolbar>
-        <SearchInput value={city} onChange={setCity} placeholder="Filter by city..." />
-        <Select
-          label="Type"
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          options={typeOptions}
+      <section className={`panel ${styles.searchPanel}`}>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search events, cities or categories"
         />
-        <Select
-          label="Category"
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          options={categoryOptions}
-        />
-      </Toolbar>
+      </section>
 
-      <DataTable
-        data={items}
-        columns={columns}
-        keyExtractor={(item) => item.id}
-        isLoading={isLoading}
-        onRowClick={(item) => navigate(`/events/${item.id}`)}
-      />
-      <Pagination total={total} offset={offset} limit={PAGE_SIZE} onChange={setOffset} />
+      <section className={`panel ${styles.filtersPanel}`}>
+        <div className={styles.chipRow} aria-label="Event category filters">
+          <button
+            type="button"
+            className={`${styles.chip} ${!activeCategoryId ? styles.chipActive : ''}`}
+            onClick={() => setActiveCategoryId('')}
+          >
+            All categories
+          </button>
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              className={`${styles.chip} ${activeCategoryId === category.id ? styles.chipActive : ''}`}
+              onClick={() => setActiveCategoryId(category.id)}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className={`panel ${styles.tablePanel}`}>
+        <DataTable
+          isLoading={isLoading}
+          data={events}
+          keyExtractor={(event: EventListItem) => event.id}
+          columns={[
+            {
+              key: 'title',
+              header: 'Event',
+              render: (event: EventListItem) => (
+                <div className={styles.eventCell}>
+                  <div className={styles.eventPoster}>
+                    {event.poster_url ? (
+                      <img src={event.poster_url} alt={event.title} />
+                    ) : (
+                      <div className={styles.eventPosterFallback}>No poster</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className={styles.eventTitle}>{event.title}</div>
+                    <div className={styles.eventMeta}>{event.city}</div>
+                  </div>
+                </div>
+              ),
+            },
+            {
+              key: 'type',
+              header: 'Type',
+              render: (event: EventListItem) => TYPE_COPY[event.type].title,
+            },
+            {
+              key: 'category',
+              header: 'Category',
+              render: (event: EventListItem) => event.category?.name ?? '—',
+            },
+            {
+              key: 'date',
+              header: 'Start',
+              render: (event: EventListItem) => formatDateTime(event.start_datetime ?? event.next_session_at),
+            },
+            {
+              key: 'price',
+              header: 'Price',
+              render: (event: EventListItem) => (event.min_price != null ? `$${event.min_price}` : '—'),
+            },
+            {
+              key: 'status',
+              header: 'Status',
+              render: (event: EventListItem) => (
+                <span className={`${styles.statusPill} ${event.is_active ? styles.statusActive : styles.statusInactive}`}>
+                  {event.is_active ? 'Active' : 'Hidden'}
+                </span>
+              ),
+            },
+            {
+              key: 'actions',
+              header: '',
+              render: (event: EventListItem) => (
+                <div className={styles.actions}>
+                  <Button variant="secondary" size="sm" onClick={() => navigate(`/events/${event.id}`)} className={styles.actionButton}>
+                    <ArrowRight size={14} /> Open
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => navigate(`/events/${event.id}`)} className={styles.actionButton}>
+                    <Edit2 size={14} /> Edit
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => handleDelete(event)} className={styles.actionButton}>
+                    <Trash2 size={14} /> Delete
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+          onRowClick={(event: EventListItem) => navigate(`/events/${event.id}`)}
+        />
+
+        <Pagination
+          total={total}
+          offset={offset}
+          limit={PAGE_SIZE}
+          onChange={setOffset}
+        />
+      </section>
 
       <SidePanel
         isOpen={isPanelOpen}
+        title="Create event"
         onClose={() => setIsPanelOpen(false)}
-        title="Add new event"
       >
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className={styles.form}>
+          <div className={styles.typeGrid} role="tablist" aria-label="Event type">
+            {EVENT_TYPES.map((type) => {
+              const isActive = form.type === type;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  className={`${styles.typeChip} ${isActive ? styles.typeChipActive : ''}`}
+                  onClick={() => setForm((current) => ({ ...current, type }))}
+                >
+                  <span className={styles.typeChipTitle}>{TYPE_COPY[type].title}</span>
+                  <span className={styles.typeChipNote}>{TYPE_COPY[type].description}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className={styles.typeSummary} style={{ borderColor: activeTypeCopy.accent }}>
+            <div className={styles.typeSummaryTitle}>{activeTypeCopy.title}</div>
+            <div className={styles.typeSummaryNote}>{activeTypeCopy.description}</div>
+          </div>
+
           <TextField
             label="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            placeholder="e.g. Summer Music Festival"
-          />
-          <Select
-            label="Type"
-            value={type}
-            onChange={(e) => setType(e.target.value as EventType)}
-            options={EVENT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+            value={form.title}
+            onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+            placeholder="Movie night at the plaza"
             required
           />
-          <TextField
-            label="City"
-            value={formCity}
-            onChange={(e) => setFormCity(e.target.value)}
-            required
-            placeholder="e.g. New York"
-          />
-          <Select
-            label="Category"
-            value={formCategory}
-            onChange={(e) => setFormCategory(e.target.value)}
-            options={[{ value: '', label: '— None —' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
-          />
-          <TextField
-            label="Poster URL"
-            value={posterUrl}
-            onChange={(e) => setPosterUrl(e.target.value)}
-            placeholder="https://..."
-          />
-          <TextField
-            label="Trailer URL"
-            value={trailerUrl}
-            onChange={(e) => setTrailerUrl(e.target.value)}
-            placeholder="https://..."
-          />
+
           <TextArea
             label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={form.description}
+            onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+            placeholder="Add a short description of the event..."
+            rows={4}
           />
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
+
+          <div className={styles.gridTwo}>
+            <TextField
+              label="City"
+              value={form.city}
+              onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))}
+              placeholder="Almaty"
+              required
+            />
+            <TextField
+              label="Category ID"
+              value={form.categoryId}
+              onChange={(event) => setForm((current) => ({ ...current, categoryId: event.target.value }))}
+              placeholder="Select from category chips or paste an ID"
+            />
+          </div>
+
+          <div className={styles.gridTwo}>
+            <TextField
+              label="Start date and time"
+              type="datetime-local"
+              value={form.startDateTime}
+              onChange={(event) => setForm((current) => ({ ...current, startDateTime: event.target.value }))}
+            />
+            <TextField
+              label="End date and time"
+              type="datetime-local"
+              value={form.endDateTime}
+              onChange={(event) => setForm((current) => ({ ...current, endDateTime: event.target.value }))}
+            />
+          </div>
+
+          {activeTypeCopy.showVenue ? (
+            <TextField
+              label="Venue ID"
+              value={form.venueId}
+              onChange={(event) => setForm((current) => ({ ...current, venueId: event.target.value }))}
+              placeholder="Optional venue identifier"
+            />
+          ) : null}
+
+          {activeTypeCopy.showPrice || activeTypeCopy.showCapacity ? (
+            <div className={styles.gridTwo}>
+              {activeTypeCopy.showPrice ? (
+                <TextField
+                  label="Price"
+                  type="number"
+                  value={form.price}
+                  onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))}
+                  placeholder="25"
+                />
+              ) : (
+                <div className={styles.placeholderCard}>
+                  This event type does not need a ticket price.
+                </div>
+              )}
+              {activeTypeCopy.showCapacity ? (
+                <TextField
+                  label="Max capacity"
+                  type="number"
+                  value={form.maxCapacity}
+                  onChange={(event) => setForm((current) => ({ ...current, maxCapacity: event.target.value }))}
+                  placeholder="120"
+                />
+              ) : (
+                <div className={styles.placeholderCard}>
+                  Capacity is optional for this event type.
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          <label className={styles.checkbox}>
             <input
               type="checkbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
+              checked={form.isActive}
+              onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))}
             />
-            Active (visible in app)
+            <span>Publish immediately</span>
           </label>
 
-          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-            <Button type="button" variant="secondary" onClick={() => setIsPanelOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create & open'}
-            </Button>
+          <div className={styles.uploadStack}>
+            <ImageUpload
+              label="Poster file"
+              onFileSelect={setPosterFile}
+            />
+
+            <label className={styles.fileUpload}>
+              <span className={styles.fileUploadLabel}>Trailer file</span>
+              <input
+                type="file"
+                accept="video/mp4,video/x-matroska,video/webm"
+                onChange={(event) => setTrailerFile(event.target.files?.[0] ?? null)}
+              />
+              <span className={styles.fileUploadHint}>
+                MP4 or MKV only. The uploader stores the file in MinIO.
+              </span>
+              {trailerFile ? <span className={styles.fileUploadName}>{trailerFile.name}</span> : null}
+            </label>
           </div>
-        </form>
+        </div>
+
+        <div className={styles.panelFooter}>
+          <Button variant="secondary" onClick={() => setIsPanelOpen(false)} className={styles.footerButton}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={submitCreate} disabled={isSaving} className={styles.footerButton}>
+            <Upload size={16} /> {isSaving ? 'Saving...' : 'Create event'}
+          </Button>
+        </div>
       </SidePanel>
     </div>
   );
 }
+
+export { EventsPage as Events };

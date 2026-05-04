@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout';
 import { Dashboard } from './pages/Dashboard';
-import { Movies } from './pages/Movies';
 import { Actors } from './pages/Actors';
 import { Series } from './pages/Series';
 import { SeriesDetail } from './pages/SeriesDetail';
@@ -25,7 +24,6 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<Layout />}>
                 <Route index element={<Dashboard />} />
-                <Route path="movies" element={<Movies />} />
                 <Route path="movie-categories" element={<MovieCategories />} />
                 <Route path="actors" element={<Actors />} />
                 <Route path="series" element={<Series />} />
