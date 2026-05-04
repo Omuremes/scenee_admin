@@ -50,9 +50,12 @@ export function SeriesDetail() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [currentPosterUrl, setCurrentPosterUrl] = useState('');
+  const [currentTrailerUrl, setCurrentTrailerUrl] = useState('');
   const [actorIds, setActorIds] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [savingOverview, setSavingOverview] = useState(false);
+  const [trailerFile, setTrailerFile] = useState<File | null>(null);
+  const trailerInputRef = useRef<HTMLInputElement>(null);
 
   const [allActors, setAllActors] = useState<Actor[]>([]);
   const [allCategories, setAllCategories] = useState<MovieCategory[]>([]);
@@ -87,6 +90,7 @@ export function SeriesDetail() {
       setName(data.name);
       setDescription(data.description || '');
       setCurrentPosterUrl(data.poster_url || '');
+      setCurrentTrailerUrl(data.trailer_url || '');
       setActorIds((data.actors || []).map((a) => a.id));
       setCategoryIds((data.categories || []).map((c) => c.id));
     } catch (err: any) {
@@ -140,8 +144,8 @@ export function SeriesDetail() {
     }
   };
 
-  const handlePosterUpload = async (file: File) => {
-    if (!serialId) return;
+  const handlePosterUpload = async (file: File | null) => {
+    if (!serialId || !file) return;
     try {
       const updated = await serialsService.uploadSerialPoster(serialId, file);
       setSerial(updated);
@@ -149,6 +153,20 @@ export function SeriesDetail() {
       toast.success('Poster updated');
     } catch (err: any) {
       toast.error(err.message || 'Failed to upload poster');
+    }
+  };
+
+  const handleTrailerUpload = async (file: File | null) => {
+    if (!serialId || !file) return;
+    try {
+      const updated = await serialsService.uploadSerialTrailer(serialId, file);
+      setSerial(updated);
+      setCurrentTrailerUrl(updated.trailer_url || '');
+      setTrailerFile(null);
+      if (trailerInputRef.current) trailerInputRef.current.value = '';
+      toast.success('Trailer updated');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload trailer');
     }
   };
 
@@ -349,6 +367,30 @@ export function SeriesDetail() {
               onFileSelect={handlePosterUpload}
               currentImageUrl={currentPosterUrl}
             />
+            <div>
+              <label style={{ fontSize: '0.875rem', fontWeight: 500, display: 'block', marginBottom: '0.25rem' }}>
+                Trailer video (mp4 / mkv)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input
+                  ref={trailerInputRef}
+                  type="file"
+                  accept="video/mp4,video/x-matroska"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setTrailerFile(file);
+                    handleTrailerUpload(file);
+                  }}
+                  style={{ flex: 1, fontSize: '0.8125rem' }}
+                />
+                {trailerFile && <Upload size={14} />}
+              </div>
+              {currentTrailerUrl && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                  Current trailer: <a href={currentTrailerUrl} target="_blank" rel="noreferrer">open</a>
+                </div>
+              )}
+            </div>
             <MultiSelect
               label="Categories"
               value={categoryIds}

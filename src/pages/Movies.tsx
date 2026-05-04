@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader/PageHeader';
 import { DataTable } from '../components/DataTable/DataTable';
 import type { Column } from '../components/DataTable/DataTable';
@@ -6,19 +7,15 @@ import { Button } from '../components/Button/Button';
 import { SidePanel } from '../components/SidePanel/SidePanel';
 import { TextField } from '../components/TextField/TextField';
 import { TextArea } from '../components/TextArea/TextArea';
-import { ImageUpload } from '../components/ImageUpload/ImageUpload';
 import { MultiSelect } from '../components/MultiSelect/MultiSelect';
 import { Pagination } from '../components/Pagination/Pagination';
 import { SearchInput } from '../components/SearchInput/SearchInput';
 import { Toolbar } from '../components/Toolbar/Toolbar';
 import { Select } from '../components/Select/Select';
-import { Plus, Pencil, Trash2, Upload } from 'lucide-react';
 import { moviesService } from '../services/movies';
 import type { MovieDetail, MovieListItem } from '../services/movies';
-import { movieCategoriesService } from '../services/movieCategories';
-import type { MovieCategory } from '../services/movieCategories';
-import { actorsService } from '../services/actors';
-import type { Actor } from '../services/actors';
+import { eventCategoriesService } from '../services/events';
+import type { EventCategory } from '../services/events';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 
@@ -34,9 +31,7 @@ export function Movies() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
 
-  const [categories, setCategories] = useState<MovieCategory[]>([]);
-  const [actors, setActors] = useState<Actor[]>([]);
-
+  const [categories, setCategories] = useState<EventCategory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,13 +40,8 @@ export function Movies() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [duration, setDuration] = useState('');
-  const [posterFile, setPosterFile] = useState<File | null>(null);
   const [currentPosterUrl, setCurrentPosterUrl] = useState('');
-  const [selectedActors, setSelectedActors] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
 
   const fetchMovies = useCallback(async () => {
     setIsLoading(true);
@@ -83,15 +73,11 @@ export function Movies() {
     let alive = true;
     (async () => {
       try {
-        const [cats, acts] = await Promise.all([
-          movieCategoriesService.getMovieCategories({ limit: 100 }),
-          actorsService.getActors({ limit: 100 }),
-        ]);
+        const cats = await eventCategoriesService.getCategories({ limit: 100 });
         if (!alive) return;
         setCategories(cats.items || []);
-        setActors(acts.items || []);
       } catch (err: any) {
-        if (alive) toast.error(err.message || 'Failed to load related data');
+        if (alive) toast.error(err.message || 'Failed to load categories');
       }
     })();
     return () => {
@@ -102,13 +88,8 @@ export function Movies() {
   const resetForm = () => {
     setName('');
     setDescription('');
-    setDuration('');
     setCurrentPosterUrl('');
-    setPosterFile(null);
-    setSelectedActors([]);
     setSelectedCategories([]);
-    setVideoFile(null);
-    if (videoInputRef.current) videoInputRef.current.value = '';
   };
 
   const openCreatePanel = () => {
@@ -123,13 +104,8 @@ export function Movies() {
       setEditingMovie(detail);
       setName(detail.name);
       setDescription(detail.description || '');
-      setDuration(detail.duration ? String(detail.duration) : '');
       setCurrentPosterUrl(detail.poster_url || detail.primary_poster?.url || '');
-      setPosterFile(null);
-      setSelectedActors((detail.actors || []).map((a) => a.id));
-      setSelectedCategories((detail.categories || []).map((c) => c.id));
-      setVideoFile(null);
-      if (videoInputRef.current) videoInputRef.current.value = '';
+      setSelectedCategories((detail.categories || []).map((category) => category.id));
       setIsPanelOpen(true);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load movie');
@@ -143,25 +119,17 @@ export function Movies() {
       const payload = {
         name,
         description: description || undefined,
-        duration: duration ? Number.parseInt(duration, 10) : undefined,
-        actors: selectedActors,
         categories: selectedCategories,
       };
       const saved = editingMovie
         ? await moviesService.updateMovie(editingMovie.id, payload)
         : await moviesService.createMovie(payload);
 
-      if (posterFile) {
-        await moviesService.uploadMoviePoster(saved.id, posterFile);
-      }
-      if (videoFile) {
-        await moviesService.uploadMovieVideo(saved.id, videoFile);
-      }
-
       toast.success(editingMovie ? 'Movie updated' : 'Movie created');
       setIsPanelOpen(false);
       setEditingMovie(null);
       resetForm();
+      setCurrentPosterUrl(saved.poster_url || saved.primary_poster?.url || '');
       fetchMovies();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save movie');
@@ -190,18 +158,13 @@ export function Movies() {
   const categoryOptions = useMemo(
     () => [
       { value: '', label: 'All categories' },
-      ...categories.map((c) => ({ value: c.id, label: c.name })),
+      ...categories.map((category) => ({ value: category.id, label: category.name })),
     ],
     [categories],
   );
 
-  const actorOptions = useMemo(
-    () => actors.map((a) => ({ value: a.id, label: a.full_name })),
-    [actors],
-  );
-
   const categoryMultiOptions = useMemo(
-    () => categories.map((c) => ({ value: c.id, label: c.name })),
+    () => categories.map((category) => ({ value: category.id, label: category.name })),
     [categories],
   );
 
@@ -217,15 +180,14 @@ export function Movies() {
             style={{ width: 36, height: 52, objectFit: 'cover', borderRadius: 'var(--radius-sm)' }}
           />
         ) : (
-          <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+          <span style={{ color: 'var(--color-text-tertiary)' }}>-</span>
         ),
     },
     { key: 'name', header: 'Title' },
-    { key: 'duration', header: 'Duration', render: (item) => (item.duration ? `${item.duration} min` : '—') },
     {
       key: 'categories',
       header: 'Categories',
-      render: (item) => (item.categories?.length ? item.categories.map((c) => c.name).join(', ') : '—'),
+      render: (item) => (item.categories?.length ? item.categories.map((category) => category.name).join(', ') : '-'),
     },
     {
       key: 'average_rating',
@@ -238,7 +200,10 @@ export function Movies() {
       render: (item) => (
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button
-            onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(item);
+            }}
             style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', padding: 4 }}
             title="Edit"
             type="button"
@@ -246,7 +211,10 @@ export function Movies() {
             <Pencil size={16} />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); handleDelete(item); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(item);
+            }}
             style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 4 }}
             title="Delete"
             type="button"
@@ -262,7 +230,7 @@ export function Movies() {
     <div>
       <PageHeader
         title="Movies"
-        subtitle="Manage standalone movies in the catalog"
+        subtitle="Manage movie entries backed by cinema events"
         action={
           <Button onClick={openCreatePanel}>
             <Plus size={16} /> Add movie
@@ -302,41 +270,18 @@ export function Movies() {
             placeholder="e.g. Inception"
           />
 
-          <TextField
-            label="Duration (minutes)"
-            type="number"
-            min={1}
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            placeholder="120"
-          />
-
-          <ImageUpload
-            label="Poster"
-            onFileSelect={setPosterFile}
-            currentImageUrl={currentPosterUrl}
-          />
-
-          <div>
-            <label style={{ fontSize: '0.875rem', fontWeight: 500, display: 'block', marginBottom: '0.25rem' }}>
-              Video file (mp4 / mkv)
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input
-                ref={videoInputRef}
-                type="file"
-                accept="video/mp4,video/x-matroska"
-                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                style={{ flex: 1, fontSize: '0.8125rem' }}
+          {currentPosterUrl && (
+            <div>
+              <label style={{ fontSize: '0.875rem', fontWeight: 500, display: 'block', marginBottom: '0.25rem' }}>
+                Poster
+              </label>
+              <img
+                src={currentPosterUrl}
+                alt={name || 'Movie poster'}
+                style={{ width: 120, borderRadius: 'var(--radius-md)', objectFit: 'cover' }}
               />
-              {videoFile && <Upload size={14} />}
             </div>
-            {editingMovie?.video_url && (
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
-                Current video: <a href={editingMovie.video_url} target="_blank" rel="noreferrer">open</a>
-              </div>
-            )}
-          </div>
+          )}
 
           <MultiSelect
             label="Categories"
@@ -344,14 +289,6 @@ export function Movies() {
             options={categoryMultiOptions}
             onChange={setSelectedCategories}
             placeholder="Pick categories..."
-          />
-
-          <MultiSelect
-            label="Actors"
-            value={selectedActors}
-            options={actorOptions}
-            onChange={setSelectedActors}
-            placeholder="Pick actors..."
           />
 
           <TextArea

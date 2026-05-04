@@ -48,6 +48,8 @@ export interface SerialDetail {
   description?: string | null;
   poster_key?: string | null;
   poster_url?: string | null;
+  trailer_video_key?: string | null;
+  trailer_url?: string | null;
   average_rating: number;
   created_at: string;
   updated_at?: string | null;
@@ -60,6 +62,7 @@ export interface SerialCreate {
   name: string;
   description?: string;
   poster?: string;
+  trailer_video_key?: string;
   actors?: string[];
   categories?: string[];
 }
@@ -114,6 +117,12 @@ export const serialsService = {
     const formData = new FormData();
     formData.append('poster', file);
     return api.postForm<SerialDetail>(`/admin/serials/${id}/poster`, formData);
+  },
+
+  uploadSerialTrailer: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('trailer', file);
+    return api.postForm<SerialDetail>(`/admin/serials/${id}/trailer`, formData);
   },
 
   addSeason: (serialId: string, data: SeasonCreate) =>

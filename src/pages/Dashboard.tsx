@@ -93,7 +93,7 @@ export function Dashboard() {
               </span>
               <ArrowUpRight size={16} className={styles.arrow} />
             </div>
-            <div className={styles.value}>{isLoading ? '—' : card.value}</div>
+            <div className={styles.value}>{isLoading ? '-' : card.value}</div>
             <div className={styles.label}>{card.label}</div>
           </Link>
         ))}
@@ -114,7 +114,7 @@ export function Dashboard() {
                   <div>
                     <div className={styles.itemTitle}>{movie.name}</div>
                     <div className={styles.itemMeta}>
-                      {movie.duration ? `${movie.duration} min` : 'no duration'} · ⭐ {movie.average_rating.toFixed(1)}
+                      {movie.categories.length ? movie.categories.map((category) => category.name).join(', ') : 'no category'} · ★ {movie.average_rating.toFixed(1)}
                     </div>
                   </div>
                 </li>
@@ -137,7 +137,7 @@ export function Dashboard() {
                   <div>
                     <div className={styles.itemTitle}>{event.title}</div>
                     <div className={styles.itemMeta}>
-                      {event.type} · {event.city || '—'}
+                      {event.type} · {event.city || '-'}
                       {event.next_session_at
                         ? ` · ${new Date(event.next_session_at).toLocaleString()}`
                         : ''}
