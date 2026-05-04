@@ -35,6 +35,8 @@ const PRICING_TYPES: { value: SessionPricingType; label: string }[] = [
   { value: 'all', label: 'All' },
 ];
 
+const PER_SEAT_PRICING_TYPE: SessionPricingType = 'per_seat';
+
 type SessionForm = {
   starts_at: string;
   ends_at: string;
@@ -42,6 +44,7 @@ type SessionForm = {
   pricing_type: SessionPricingType;
   cinema_name: string;
   hall_name: string;
+  seats_text: string;
 };
 
 type SeatForm = {
@@ -61,6 +64,23 @@ function toLocalInput(value?: string | null): string {
 function fromLocalInput(value: string): string | undefined {
   if (!value) return undefined;
   return new Date(value).toISOString();
+}
+
+function parseSeatRows(value: string, fallbackPrice: number) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [labelRaw, zoneRaw, priceRaw] = line.split('|').map((part) => part.trim());
+      return {
+        label: labelRaw,
+        zone: zoneRaw || undefined,
+        price: priceRaw ? Number(priceRaw) : fallbackPrice,
+        is_available: true,
+      };
+    })
+    .filter((seat) => Boolean(seat.label));
 }
 
 export function EventDetail() {
@@ -96,6 +116,7 @@ export function EventDetail() {
     pricing_type: 'fixed',
     cinema_name: '',
     hall_name: '',
+    seats_text: '',
   });
   const [savingSession, setSavingSession] = useState(false);
 
@@ -185,6 +206,9 @@ export function EventDetail() {
         pricing_type: session.pricing_type,
         cinema_name: session.cinema_name || '',
         hall_name: session.hall_name || '',
+        seats_text: (session.seats || [])
+          .map((seat) => [seat.label, seat.zone || '', seat.price].join('|'))
+          .join('\n'),
       });
     } else {
       setSessionForm({
@@ -194,6 +218,7 @@ export function EventDetail() {
         pricing_type: 'fixed',
         cinema_name: '',
         hall_name: '',
+        seats_text: '',
       });
     }
     setSessionPanelOpen(true);
@@ -209,7 +234,7 @@ export function EventDetail() {
     }
     setSavingSession(true);
     try {
-      const payload = {
+      const basePayload = {
         starts_at: startsAt,
         ends_at: fromLocalInput(sessionForm.ends_at),
         base_price: Number(sessionForm.base_price) || 0,
@@ -218,10 +243,21 @@ export function EventDetail() {
         hall_name: sessionForm.hall_name || undefined,
       };
       if (editingSession) {
-        await eventSessionsService.update(editingSession.id, payload);
+        await eventSessionsService.update(editingSession.id, basePayload);
         toast.success('Session updated');
       } else {
-        await eventSessionsService.create(eventId, payload);
+        const seats =
+          sessionForm.pricing_type === PER_SEAT_PRICING_TYPE
+            ? parseSeatRows(sessionForm.seats_text, Number(sessionForm.base_price) || 0)
+            : [];
+
+        if (sessionForm.pricing_type === PER_SEAT_PRICING_TYPE && seats.length === 0) {
+          toast.error('Per-seat sessions must define at least one seat');
+          setSavingSession(false);
+          return;
+        }
+
+        await eventSessionsService.create(eventId, { ...basePayload, seats });
         toast.success('Session created');
       }
       setSessionPanelOpen(false);
@@ -547,6 +583,21 @@ export function EventDetail() {
             }
             options={PRICING_TYPES.map((p) => ({ value: p.value, label: p.label }))}
           />
+          {sessionForm.pricing_type === PER_SEAT_PRICING_TYPE && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <TextArea
+                label="Seats"
+                value={sessionForm.seats_text}
+                onChange={(e) => setSessionForm({ ...sessionForm, seats_text: e.target.value })}
+                placeholder={'A1|VIP|250\nA2|VIP|250\nB1||200'}
+                rows={6}
+                required
+              />
+              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-tertiary)' }}>
+                One seat per line: label|zone|price. Leave price empty to use the session base price.
+              </div>
+            </div>
+          )}
           <TextField
             label="Cinema name"
             value={sessionForm.cinema_name}

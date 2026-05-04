@@ -187,6 +187,12 @@ export interface SessionCreateInput {
   pricing_type: SessionPricingType;
   cinema_name?: string;
   hall_name?: string;
+  seats?: {
+    label: string;
+    zone?: string;
+    price: number;
+    is_available?: boolean;
+  }[];
 }
 
 export type SessionUpdateInput = Partial<SessionCreateInput>;
@@ -196,7 +202,7 @@ export const eventSessionsService = {
     api.get<EventSession[]>(`${ADMIN_EVENTS}/${eventId}/sessions`),
 
   create: (eventId: string, data: SessionCreateInput) =>
-    api.post<EventSession>(`${ADMIN_EVENTS}/${eventId}/sessions`, { ...data, seats: [] }),
+    api.post<EventSession>(`${ADMIN_EVENTS}/${eventId}/sessions`, data),
 
   update: (sessionId: string, data: SessionUpdateInput) =>
     api.patch<EventSession>(`${ADMIN_EVENTS}/sessions/${sessionId}`, data),
