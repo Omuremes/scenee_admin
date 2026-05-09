@@ -50,6 +50,7 @@ export function SeriesDetail() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [currentPosterUrl, setCurrentPosterUrl] = useState('');
+  const [currentTrailerPosterUrl, setCurrentTrailerPosterUrl] = useState('');
   const [currentTrailerUrl, setCurrentTrailerUrl] = useState('');
   const [actorIds, setActorIds] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
@@ -90,6 +91,7 @@ export function SeriesDetail() {
       setName(data.name);
       setDescription(data.description || '');
       setCurrentPosterUrl(data.poster_url || '');
+      setCurrentTrailerPosterUrl(data.trailer_poster_url || '');
       setCurrentTrailerUrl(data.trailer_url || '');
       setActorIds((data.actors || []).map((a) => a.id));
       setCategoryIds((data.categories || []).map((c) => c.id));
@@ -153,6 +155,18 @@ export function SeriesDetail() {
       toast.success('Poster updated');
     } catch (err: any) {
       toast.error(err.message || 'Failed to upload poster');
+    }
+  };
+
+  const handleTrailerPosterUpload = async (file: File | null) => {
+    if (!serialId || !file) return;
+    try {
+      const updated = await serialsService.uploadSerialTrailerPoster(serialId, file);
+      setSerial(updated);
+      setCurrentTrailerPosterUrl(updated.trailer_poster_url || '');
+      toast.success('Trailer preview updated');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload trailer preview');
     }
   };
 
@@ -366,6 +380,11 @@ export function SeriesDetail() {
               label="Poster"
               onFileSelect={handlePosterUpload}
               currentImageUrl={currentPosterUrl}
+            />
+            <ImageUpload
+              label="Trailer preview image"
+              onFileSelect={handleTrailerPosterUpload}
+              currentImageUrl={currentTrailerPosterUrl}
             />
             <div>
               <label style={{ fontSize: '0.875rem', fontWeight: 500, display: 'block', marginBottom: '0.25rem' }}>

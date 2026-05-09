@@ -48,6 +48,8 @@ export interface SerialDetail {
   description?: string | null;
   poster_key?: string | null;
   poster_url?: string | null;
+  trailer_poster_key?: string | null;
+  trailer_poster_url?: string | null;
   trailer_video_key?: string | null;
   trailer_url?: string | null;
   average_rating: number;
@@ -117,6 +119,12 @@ export const serialsService = {
     const formData = new FormData();
     formData.append('poster', file);
     return api.postForm<SerialDetail>(`/admin/serials/${id}/poster`, formData);
+  },
+
+  uploadSerialTrailerPoster: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('poster', file);
+    return api.postForm<SerialDetail>(`/admin/serials/${id}/trailer-poster`, formData);
   },
 
   uploadSerialTrailer: (id: string, file: File) => {
