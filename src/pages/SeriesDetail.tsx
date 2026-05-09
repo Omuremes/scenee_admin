@@ -326,6 +326,17 @@ export function SeriesDetail() {
     }
   };
 
+  const handleEpisodePosterUpload = async (episodeId: string, file: File | null) => {
+    if (!file) return;
+    try {
+      await serialsService.uploadEpisodePoster(episodeId, file);
+      toast.success('Episode poster updated');
+      fetchSerial();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload episode poster');
+    }
+  };
+
   const sortedSeasons = useMemo(
     () => [...(serial?.seasons || [])].sort((a, b) => a.season_number - b.season_number),
     [serial],
@@ -479,6 +490,7 @@ export function SeriesDetail() {
                     <thead>
                       <tr>
                         <th>#</th>
+                        <th>Image</th>
                         <th>Title</th>
                         <th>Duration</th>
                         <th>Video</th>
@@ -492,6 +504,14 @@ export function SeriesDetail() {
                         .map((episode) => (
                           <tr key={episode.id}>
                             <td>{episode.episode_number}</td>
+                            <td>
+                              <div style={{ width: 60 }}>
+                                <ImageUpload
+                                  onFileSelect={(file) => handleEpisodePosterUpload(episode.id, file)}
+                                  currentImageUrl={episode.poster_url || ''}
+                                />
+                              </div>
+                            </td>
                             <td>{episode.title || '—'}</td>
                             <td>{episode.duration ? `${episode.duration} min` : '—'}</td>
                             <td>

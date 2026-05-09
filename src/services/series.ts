@@ -30,6 +30,7 @@ export interface SerialEpisode {
   title?: string | null;
   description?: string | null;
   duration?: number | null;
+  poster_url?: string | null;
   episode_file?: EpisodeFile | null;
 }
 
@@ -158,6 +159,12 @@ export const serialsService = {
       `/admin/serials/episodes/${episodeId}/upload`,
       formData,
     );
+  },
+
+  uploadEpisodePoster: (episodeId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('poster', file);
+    return api.postForm<SerialEpisode>(`/admin/serials/episodes/${episodeId}/poster`, formData);
   },
 };
 
